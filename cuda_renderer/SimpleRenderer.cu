@@ -120,7 +120,7 @@ Image* SimpleRenderer::segmentationImage(const Image* inputImage){
     
     // >> UNCHANGED: These can still be configured. <<
     const int K = 8; // Number of clusters (dominant colors)
-    const int MAX_ITERATIONS = 20;
+    const int MAX_ITERATIONS = 5;
     IMG_WIDTH = inputImage -> width;
     IMG_HEIGHT = inputImage -> height;
     std::vector<Point> points;
