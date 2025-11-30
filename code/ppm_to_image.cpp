@@ -4,7 +4,7 @@
 #include <string>
 
 // The two crucial lines for using the stb_image_write library
-#define STB_IMAGE_WRITE_IMPLEMENTATION
+//#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
 int main(int argc, char* argv[]) {
