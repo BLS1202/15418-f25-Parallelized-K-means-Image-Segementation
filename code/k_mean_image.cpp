@@ -1,10 +1,3 @@
-// Filename: k_mean_from_image.cpp
-//
-// Description:
-// Reads a P6 PPM image file, performs K-Means clustering on the pixel colors
-// to find K dominant colors, and writes a new PPM image where each pixel's
-// color is replaced by the dominant color of its cluster.
-
 #include <iostream>
 #include <vector>
 #include <fstream>
@@ -53,8 +46,6 @@ void save_image_to_ppm(const std::string& filename, const std::vector<unsigned c
 
 
 int main() {
-    // --- Configuration ---
-    // >> CHANGED: These are now determined by the input image. <<
     const auto init_start = std::chrono::steady_clock::now();
     int IMG_WIDTH = 0;
     int IMG_HEIGHT = 0;
@@ -72,7 +63,7 @@ int main() {
     
     // >> CHANGED: Step 1 is now reading from a file, not generating random points. <<
     std::vector<Point> points;
-    std::string inputFilename = "../img/camera_man.ppm"; // <-- IMPORTANT: Put your PPM file name here
+    std::string inputFilename = "camera_man.ppm"; // <-- IMPORTANT: Put your PPM file name here
 
     std::ifstream ppm_file(inputFilename, std::ios::in | std::ios::binary);
     if (!ppm_file) {
@@ -110,9 +101,9 @@ int main() {
 
     const double init_time = std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - init_start).count();
     std::cout << "Initialization time (sec): " << std::fixed << std::setprecision(10) << init_time << '\n';
-    
+
     const auto compute_start = std::chrono::steady_clock::now();
-    
+
     // 3. Run K-Means (The core loop is UNCHANGED logically!)
     for (int iter = 0; iter < MAX_ITERATIONS; ++iter) {
         bool changed = false;
@@ -148,21 +139,19 @@ int main() {
         }
         // Convergence Check
         if (!changed) {
-            std::cout << "Convergence reached at iteration " << iter + 1 << std::endl;
+            //std::cout << "Convergence reached at iteration " << iter + 1 << std::endl;
             break;
-        } else {
+        } /* else {
             std::cout << "Iteration " << iter + 1 << " complete." << std::endl;
-        }
+        } */
     }
-
-    const double compute_time = std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - compute_start).count();
-    std::cout << "Computation time (sec): " << compute_time << '\n';
-
 
     // >> CHANGED: This whole section is new. We create the final image by replacing
     //          each pixel's color with the color of the centroid it belongs to. <<
-    std::cout << "------------------------------------" << std::endl;
-    std::cout << "Generating quantized image data..." << std::endl;
+    const double compute_time = std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - compute_start).count();
+    std::cout << "Computation time (sec): " << compute_time << '\n';
+
+    const auto updateimage_start = std::chrono::steady_clock::now();
     std::vector<unsigned char> result_image(IMG_WIDTH * IMG_HEIGHT * 3);
     for (size_t i = 0; i < points.size(); ++i) {
         // Get the centroid color for the current pixel
@@ -172,7 +161,12 @@ int main() {
         result_image[i * 3 + 0] = static_cast<unsigned char>(centroid_color.r);
         result_image[i * 3 + 1] = static_cast<unsigned char>(centroid_color.g);
         result_image[i * 3 + 2] = static_cast<unsigned char>(centroid_color.b);
+
     }
+
+    const double updateimage_time = std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - updateimage_start).count();
+    std::cout << "update image time (sec): " << updateimage_time << '\n';
+
     std::cout << "Image data stored in vector." << std::endl;
 
 
