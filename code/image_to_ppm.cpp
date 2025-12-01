@@ -3,7 +3,7 @@
 #include <vector>
 #include <string>
 // The two crucial lines for using the stb_image library
-#define STB_IMAGE_IMPLEMENTATION
+// #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 // A helper function to write the image data to a P6 PPM file
 void write_ppm(const std::string& filename, int width, int height, unsigned char* data) {
