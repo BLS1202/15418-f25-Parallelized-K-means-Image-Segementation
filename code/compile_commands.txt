@@ -1,0 +1,8 @@
+basic cpu version:
+g++ -std=c++17 -O3 -o k_means_normal k_mean_image.cpp
+./k_means_normal
+
+-----------------------------------------------------
+basic gpu version:
+nvcc k_mean_image_cuda.cu -o k_means_cuda -ccbin g++-11
+./k_means_cuda

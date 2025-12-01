@@ -5,9 +5,11 @@
 #include <cmath>
 #include <random>
 #include <ctime>
-#include <string> // Added for std::string
+#include <string>
+#include <limits>
+#include <chrono>
+#include <iomanip>
 
-// Error 1: Missing semicolon
 struct Point {
     float r, g, b;
 };
@@ -114,6 +116,7 @@ __global__ void generate_output_image_kernel(Point* d_outputImage, const int* d_
 // =================================================================================
 
 int main() {
+    const auto init_start = std::chrono::steady_clock::now();
     int K = 8;
     int MAX_ITERATIONS = 20;
 
@@ -193,6 +196,12 @@ int main() {
     dim3 centroidGridDim((K + 255) / 256);
     dim3 centroidBlockDim(256);
 
+    const double init_time = std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - init_start).count();
+    std::cout << "Initialization time (sec): " << std::fixed << std::setprecision(10) << init_time << '\n';
+
+    const auto compute_start = std::chrono::steady_clock::now();
+
+
     std::cout << "Running K-Means algorithm on GPU..." << std::endl;
     for (int iter = 0; iter < MAX_ITERATIONS; ++iter) {
         assign_clusters_kernel<<<gridDim, blockDim>>>(d_inputImage, d_clusterIds, d_centroids, numPoints, K, IMG_WIDTH);
@@ -215,6 +224,9 @@ int main() {
     
     std::vector<Point> h_output_points(numPoints);
     cudaMemcpy(h_output_points.data(), d_outputImage, imageBytes, cudaMemcpyDeviceToHost);
+    const double compute_time = std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - compute_start).count();
+    std::cout << "Computation time (sec): " << compute_time << '\n';
+
 
     std::vector<unsigned char> result_image(numPoints * 3);
     for (size_t i = 0; i < h_output_points.size(); ++i) {

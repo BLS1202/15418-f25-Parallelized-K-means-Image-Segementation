@@ -12,6 +12,8 @@
 #include <random>
 #include <ctime>
 #include <limits>
+#include <chrono>
+#include <iomanip>
 
 // --- Data Structures ---
 
@@ -53,6 +55,7 @@ void save_image_to_ppm(const std::string& filename, const std::vector<unsigned c
 int main() {
     // --- Configuration ---
     // >> CHANGED: These are now determined by the input image. <<
+    const auto init_start = std::chrono::steady_clock::now();
     int IMG_WIDTH = 0;
     int IMG_HEIGHT = 0;
     
@@ -69,7 +72,7 @@ int main() {
     
     // >> CHANGED: Step 1 is now reading from a file, not generating random points. <<
     std::vector<Point> points;
-    std::string inputFilename = "camera_man.ppm"; // <-- IMPORTANT: Put your PPM file name here
+    std::string inputFilename = "../img/camera_man.ppm"; // <-- IMPORTANT: Put your PPM file name here
 
     std::ifstream ppm_file(inputFilename, std::ios::in | std::ios::binary);
     if (!ppm_file) {
@@ -105,6 +108,11 @@ int main() {
         centroids.push_back(points[dist(rng)]);
     }
 
+    const double init_time = std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - init_start).count();
+    std::cout << "Initialization time (sec): " << std::fixed << std::setprecision(10) << init_time << '\n';
+    
+    const auto compute_start = std::chrono::steady_clock::now();
+    
     // 3. Run K-Means (The core loop is UNCHANGED logically!)
     for (int iter = 0; iter < MAX_ITERATIONS; ++iter) {
         bool changed = false;
@@ -146,6 +154,10 @@ int main() {
             std::cout << "Iteration " << iter + 1 << " complete." << std::endl;
         }
     }
+
+    const double compute_time = std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - compute_start).count();
+    std::cout << "Computation time (sec): " << compute_time << '\n';
+
 
     // >> CHANGED: This whole section is new. We create the final image by replacing
     //          each pixel's color with the color of the centroid it belongs to. <<

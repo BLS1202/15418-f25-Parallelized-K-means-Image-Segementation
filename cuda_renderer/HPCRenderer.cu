@@ -173,7 +173,7 @@ __global__ void generate_output_image_kernel(float4* d_outputImage, const int* d
 
 HPCRenderer::HPCRenderer(Image* image){
 
-    m_k = 8;
+    m_k = 3;
     m_maxIterations = 50; // Increased iterations for better convergence
     m_currentIteration = 0;
 
