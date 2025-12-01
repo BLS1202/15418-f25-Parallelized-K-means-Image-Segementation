@@ -1,8 +1,19 @@
 basic cpu version:
-g++ -std=c++17 -O3 -o k_means_normal k_mean_image.cpp
+g++ -c k_mean_image.cpp    
+g++ k_mean_image.o -o k_mean_image
 ./k_means_normal
 
 -----------------------------------------------------
 basic gpu version:
 nvcc k_mean_image_cuda.cu -o k_means_cuda -ccbin g++-11
 ./k_means_cuda
+
+-----------------------------------------------------
+openmp:
+g++ -c k_mean_image_openmp1.cpp -fopenmp
+g++ k_mean_image_openmp1.o -fopenmp -o k_mean_image_openmp1
+./k_mean_image_openmp1
+
+g++ -c k_mean_image_openmp2.cpp -fopenmp
+g++ k_mean_image_openmp2.o -fopenmp -o k_mean_image_openmp2
+./k_mean_image_openmp2
