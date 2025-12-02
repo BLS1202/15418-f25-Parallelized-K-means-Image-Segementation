@@ -111,6 +111,10 @@ __global__ void generate_output_image_kernel(Point* d_outputImage, const int* d_
     d_outputImage[pixelIndex] = d_centroids[clusterId];
 }
 
+
+
+
+
 // =================================================================================
 // Host Code
 // =================================================================================
@@ -224,6 +228,7 @@ int main() {
     
     std::vector<Point> h_output_points(numPoints);
     cudaMemcpy(h_output_points.data(), d_outputImage, imageBytes, cudaMemcpyDeviceToHost);
+    
     const double compute_time = std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - compute_start).count();
     std::cout << "Computation time (sec): " << compute_time << '\n';
 
