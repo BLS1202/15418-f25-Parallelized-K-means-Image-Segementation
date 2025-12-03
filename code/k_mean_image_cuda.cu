@@ -111,10 +111,6 @@ __global__ void generate_output_image_kernel(Point* d_outputImage, const int* d_
     d_outputImage[pixelIndex] = d_centroids[clusterId];
 }
 
-
-
-
-
 // =================================================================================
 // Host Code
 // =================================================================================
