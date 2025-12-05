@@ -8,6 +8,10 @@ basic gpu version:
 nvcc k_mean_image_cuda.cu -o k_means_cuda -ccbin g++-11
 ./k_means_cuda
 
+
+gpu version with optimization:
+nvcc k_mean_memory.cu -o k_means_memory -ccbin g++-11
+./k_means_memory
 -----------------------------------------------------
 openmp:
 g++ -c k_mean_image_openmp1.cpp -fopenmp
