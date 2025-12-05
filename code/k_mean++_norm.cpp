@@ -94,10 +94,43 @@ int main() {
     std::vector<Point> centroids;
     std::mt19937 rng(static_cast<unsigned int>(time(0)));
     std::uniform_int_distribution<int> dist(0, points.size() - 1);
-    for (int i = 0; i < K; ++i) {
-        // Pick a random pixel from the image as an initial centroid
-        centroids.push_back(points[dist(rng)]);
+    
+    // for (int i = 0; i < K; ++i) {
+    //     // Pick a random pixel from the image as an initial centroid
+    //     centroids.push_back(points[dist(rng)]);
+    // }
+
+    //for k_means++
+    int first_idx = dist(rng);
+    centroids.push_back(points[first_idx]);
+    while(centroids.size() < K){
+        std::vector<double> distancesSquared;
+        distancesSquared.reserve(points.size());
+        double upper_limit = 0.0;
+        for(int i = 0; i < points.size(); i++){
+            Point curr_p = points[i];
+            double min_d = std::numeric_limits<double>::max();
+            for(int j = 0; j < centroids.size(); j++){
+                double d = distance(curr_p, centroids[j]);
+                if(d < min_d){
+                    min_d = d;
+                }
+            }
+            distancesSquared.push_back(min_d*min_d);
+            upper_limit += min_d*min_d;
+        }
+        std::uniform_real_distribution<> distrib(0, upper_limit);
+        double threshold = distrib(rng);
+        double cumulative = 0.0;
+        for(int i = 0; i < points.size(); i++){
+            cumulative += distancesSquared[i];
+            if(cumulative >= threshold){
+                centroids.push_back(points[i]);
+                break;
+            }
+        }
     }
+
 
     const double init_time = std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - init_start).count();
     std::cout << "Initialization time (sec): " << std::fixed << std::setprecision(10) << init_time << '\n';
@@ -108,6 +141,8 @@ int main() {
     for (int iter = 0; iter < MAX_ITERATIONS; ++iter) {
         bool changed = false;
         // Assignment Step
+
+
         for (auto& point : points) {
             double min_dist = std::numeric_limits<double>::max();
             int closest_centroid_id = -1;
@@ -120,6 +155,7 @@ int main() {
                 changed = true;
             }
         }
+
         // Update Step
         std::vector<Point> new_centroids(K, {0, 0, 0, -1}); // >> Changed to {r,g,b,id}
         std::vector<int> counts(K, 0);

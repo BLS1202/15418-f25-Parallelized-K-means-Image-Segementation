@@ -9,6 +9,10 @@
 #include <limits>
 #include <chrono>
 #include <iomanip>
+#define THREAD_X 32
+#define THREAD_Y 32
+#define BLOCKSIZE (THREAD_X * THREAD_Y) // 1024
+#define K 8
 
 struct Point {
     float r, g, b;
@@ -117,7 +121,7 @@ __global__ void generate_output_image_kernel(Point* d_outputImage, const int* d_
 
 int main() {
     const auto init_start = std::chrono::steady_clock::now();
-    int K = 8;
+    // int K = 8;
     int MAX_ITERATIONS = 20;
 
     int IMG_WIDTH = 0;
@@ -188,13 +192,13 @@ int main() {
     cudaMemcpy(d_centroids, h_centroids.data(), K * sizeof(Point), cudaMemcpyHostToDevice);
 
     // Setup Grid and Block dimensions
-    int blockSize = 256;
+    int blockSize = BLOCKSIZE;
     int gridSize = (numPoints + blockSize - 1) / blockSize;
     dim3 blockDim(blockSize);
     dim3 gridDim(gridSize);
     
-    dim3 centroidGridDim((K + 255) / 256);
-    dim3 centroidBlockDim(256);
+    dim3 centroidGridDim((K + 1023) / 1024);
+    dim3 centroidBlockDim(1024);
 
     const double init_time = std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - init_start).count();
     std::cout << "Initialization time (sec): " << std::fixed << std::setprecision(10) << init_time << '\n';
