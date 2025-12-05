@@ -6,7 +6,7 @@
 
 class Image;
 
-class CUDARenderer : public Renderer {s
+class CUDARenderer : public Renderer {
 public:
 
     CUDARenderer(Image* image);

@@ -11,9 +11,9 @@ public:
 
     HPCRenderer(Image* image);
 
-.
+
     virtual ~HPCRenderer();
-.
+
     Image* getDisplayImage() override;
 
 
