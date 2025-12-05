@@ -1,0 +1,5 @@
+renderer_cuda:
+cd renderer_cuda
+make
+./kmeans_cuda cuda ../../img/camera_man.ppm
+-------------------------------------------------
