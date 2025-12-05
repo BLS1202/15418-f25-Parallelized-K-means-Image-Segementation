@@ -177,7 +177,7 @@ int main(int argc, char** argv) {
     // The global g_renderer (HPCRenderer*) will point to the specific object we create.
     if (rendererType == "simple") {
         std::cout << "Using Simple (CPU) Renderer..." << std::endl;
-        g_renderer = new SimpleRenderer(originalImage);
+        g_renderer = new HPCRenderer(originalImage);
     } else if (rendererType == "openmp") {
         std::cout << "Using OpenMP Renderer..." << std::endl;
         g_renderer = new OpenMPRenderer(originalImage);
