@@ -9,11 +9,14 @@
 #include <limits>
 #include <chrono>
 #include <iomanip>
+#include <numeric> // Added for std::accumulate
 
 #define THREAD_X 32
 #define THREAD_Y 32
 #define BLOCKSIZE (THREAD_X * THREAD_Y) // 1024
 #define K 8
+// A smaller block size is often better for 1D reduction kernels
+#define REDUCTION_BLOCK_SIZE 256
 
 struct Point {
     float r, g, b;
@@ -46,45 +49,108 @@ __device__ float color_distance_sq(Point p1, Point p2) {
     return dr*dr + dg*dg + db*db;
 }
 
+
+// =================================================================================
+// K-MEANS++ INITIALIZATION KERNELS (EDITED SECTION)
+// =================================================================================
+
 /**
- * The main K-means kernel, corrected to use a parallel reduction in shared memory.
- * This kernel performs the ASSIGNMENT and SUMMATION steps for one iteration.
+ * K-Means++ Step 1: For each point, find the squared distance to the nearest existing centroid.
  */
-__global__ void k_means_v2(Point* d_inputImage, Point* d_centroid_sums, 
-    int* d_counts, Point* d_centroids, int numPoints, int width) {
-    // --- SETUP ---
+__global__ void kmeans_pp_init_p1(double* d_distances, const Point* d_inputImage, const Point* d_centroids,
+                                  int numPoints, int width, int centroid_size){
+
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
     int pixelIndex = y * width + x;
-    int thread_num = threadIdx.y * blockDim.x + threadIdx.x; // Thread ID within the block (0-1023)
 
-    // Shared memory for this block's pixel data, cluster assignments, and partial sums
+    if(pixelIndex >= numPoints) return;
+
+    Point pixel_data = d_inputImage[pixelIndex];
+    double min_d_sq = 1e30f;
+
+    for(int i = 0; i < centroid_size; i++){
+        double d_sq = color_distance_sq(pixel_data, d_centroids[i]);
+         if(d_sq < min_d_sq){
+            min_d_sq = d_sq;
+         }
+    }
+    d_distances[pixelIndex] = min_d_sq;
+}
+
+/**
+ * K-Means++ Step 2: Perform a parallel reduction to get the sum of distances for each block.
+ */
+__global__ void reduction(const double* d_distances, double* d_partial_sum, int numPoints){
+    extern __shared__ double s_data[];
+    int tid = threadIdx.x;
+    int i = blockIdx.x * blockDim.x + tid;
+
+    s_data[tid] = (i < numPoints) ? d_distances[i] : 0.0;
+    __syncthreads();
+
+    for(unsigned int s = blockDim.x / 2; s > 0; s >>= 1){
+        if(tid < s){
+            s_data[tid] += s_data[tid + s];
+        }
+        __syncthreads();
+    }
+
+    if(tid == 0){
+        d_partial_sum[blockIdx.x] = s_data[0];
+    }
+}
+
+/**
+ * K-Means++ Step 3: Find the new centroid by scanning within the chosen "winning" block.
+ */
+__global__ void kmeans_pp_init_p2(const double* d_distances, int* d_new_index, int numPoints, int search_block, double threshold){
+    int start_index = search_block * REDUCTION_BLOCK_SIZE;
+    int end_index = min((start_index + REDUCTION_BLOCK_SIZE), numPoints);
+
+    double cumulative = 0.0;
+    for(int i = start_index; i < end_index; i++){
+        cumulative += d_distances[i];
+        if(cumulative >= threshold){
+            *d_new_index = i;
+            return;
+        }
+    }
+    *d_new_index = end_index - 1; // Failsafe
+}
+
+
+// =================================================================================
+// CLUSTER PART (UNCHANGED SECTION)
+// =================================================================================
+
+__global__ void k_means_v2(Point* d_inputImage, Point* d_centroid_sums, 
+    int* d_counts, Point* d_centroids, int numPoints, int width) {
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+    int pixelIndex = y * width + x;
+    int thread_num = threadIdx.y * blockDim.x + threadIdx.x;
+
     __shared__ Point data_point[BLOCKSIZE];
     __shared__ int clusterIds[BLOCKSIZE];
     __shared__ Point partial_sums[K];
     __shared__ int partial_counts[K];
     __shared__ Point centroids_W[K];
 
-    // Load this block's pixel data into shared memory
     if (pixelIndex < numPoints) {
         data_point[thread_num] = d_inputImage[pixelIndex];
     }
-
-    // 1. Initialize the shared memory for sums/counts for this block.
     if (thread_num < K) {
         partial_sums[thread_num] = {0.0f, 0.0f, 0.0f};
         partial_counts[thread_num] = 0;
         centroids_W[thread_num] = d_centroids[thread_num];
     }
+    __syncthreads();
 
-    __syncthreads(); // Ensure all pixel data is loaded before proceeding
-
-    // --- ASSIGNMENT STEP ---
     if (pixelIndex < numPoints) {
         Point pixelColor = data_point[thread_num];
         float min_dist = 1e30f;
         int best_centroid_id = 0;
-
         for (int i = 0; i < K; i++) {
             float dist = color_distance_sq(pixelColor, centroids_W[i]);
             if (min_dist > dist) {
@@ -94,11 +160,8 @@ __global__ void k_means_v2(Point* d_inputImage, Point* d_centroid_sums,
         }
         clusterIds[thread_num] = best_centroid_id;
     }
-    __syncthreads(); // Ensure all threads have found their cluster ID
+    __syncthreads();
 
-    // --- UPDATE STEP (THE FIX: Parallel Reduction in Shared Memory) ---
-
-    // 2. Each thread atomically adds its pixel's data to the correct shared memory bucket.
     if (pixelIndex < numPoints) {
         int clusterId = clusterIds[thread_num];
         atomicAdd(&partial_sums[clusterId].r, data_point[thread_num].r);
@@ -106,9 +169,8 @@ __global__ void k_means_v2(Point* d_inputImage, Point* d_centroid_sums,
         atomicAdd(&partial_sums[clusterId].b, data_point[thread_num].b);
         atomicAdd(&partial_counts[clusterId], 1);
     }
-    __syncthreads(); // Ensure all threads have contributed their data
+    __syncthreads();
 
-    // 3. A single thread adds the block's total sums to the global memory sums.
     if (thread_num == 0) {
         for (int i = 0; i < K; i++) {
             if (partial_counts[i] > 0) {
@@ -121,10 +183,6 @@ __global__ void k_means_v2(Point* d_inputImage, Point* d_centroid_sums,
     }
 }
 
-/**
- * Helper Kernel 1: Performs the division to calculate new centroid averages.
- * This provides the necessary global synchronization point between iterations.
- */
 __global__ void update_centroids(Point* d_centroids, Point* d_centroid_sums, int* d_counts) {
     int i = threadIdx.x;
     if (i >= K) return;
@@ -135,10 +193,6 @@ __global__ void update_centroids(Point* d_centroids, Point* d_centroid_sums, int
     }
 }
 
-/**
- * Helper Kernel 2: Generates the final output image after all iterations are done.
- * It assigns each pixel the color of its final, converged centroid.
- */
 __global__ void generate_output_image(Point* d_outputImage, Point* d_inputImage, Point* d_centroids, int numPoints, int width) {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -146,21 +200,14 @@ __global__ void generate_output_image(Point* d_outputImage, Point* d_inputImage,
     int pixelIndex = y * width + x;
 
     __shared__ Point centroids_W[K];
-
     if (pixelIndex >= numPoints) return;
-
-    // Step 1: Have the first K threads load the global centroids into shared memory.
     if (thread_num < K) {
         centroids_W[thread_num] = d_centroids[thread_num];
     }
-
     __syncthreads();
-
-    // Now it is safe for all threads to read from centroids_W.
     Point pixelColor = d_inputImage[pixelIndex];
     float min_dist = 1e30f;
     int best_centroid_id = 0;
-
     for (int i = 0; i < K; i++) {
         float dist = color_distance_sq(pixelColor, centroids_W[i]);
         if (min_dist > dist) {
@@ -169,66 +216,6 @@ __global__ void generate_output_image(Point* d_outputImage, Point* d_inputImage,
         }
     }
     d_outputImage[pixelIndex] = centroids_W[best_centroid_id];
-}
-
-__global__ void kmeans_pp_init_p1(double* d_distances, Point* d_inputImage, Point* d_centroids,
-                int numPoints, int K, int centroid_size){
-
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
-    int thread_num = threadIdx.y * blockDim.x + threadIdx.x;
-    int pixelIndex = y * width + x;
-
-    __shared__ Point centroids_W[K];
-    if (thread_num < K) {
-        centroids_W[thread_num] = d_centroids[thread_num];
-    }
-    __syncthreads();
-
-    if(pixelIndex >= numPoints) return;
-    Point pixel_data = d_inputImage[pixelIndex];
-    double min_d = std::numeric_limits<double>::max();
-    for(int i = 0; i < centroid_size; i++){
-        double d = distance(pixel_data, centroids_W[i]);
-         if(d < min_d){
-            min_d = d;
-         }
-    }
-    d_distances[pixelIndex] = min_d*min_d;
-}
-
-//launch this kernel with (numPoints/2) threads
-__global__ void reduction(double* d_distances, double* output){
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
-    int thread_num = threadIdx.y * blockDim.x + threadIdx.x;
-    int pixelIndex = y * width + x;
-
-    __shared__ double input_s[BLOCKSIZE];
-
-    int start_index = thread_num;
-    int end_index = thread_num + BLOCKSIZE;
-
-    input_s[thread_num] = d_distances[start_index] + d_distances[end_index];
-    
-    
-    __syncthreads();
-
-    for(unsigned int i = blockDim.x/2; i >=1; i/=2){
-        if(thread_num < i){
-
-        }
-    }
-}
-
-__global__ void kmeans_pp_init_p2(){
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
-    int thread_num = threadIdx.y * blockDim.x + threadIdx.x;
-    int pixelIndex = y * width + x;
-
-    __shared__ Point centroids_W[K];
-
 }
 
 
@@ -258,7 +245,7 @@ int main() {
     }
 
     std::string line;
-    ppm_file >> line; // Read "P6"
+    ppm_file >> line;
     while (ppm_file.peek() == '\n' || ppm_file.peek() == '#') { ppm_file.ignore(256, '\n'); }
     ppm_file >> IMG_WIDTH >> IMG_HEIGHT;
     ppm_file.ignore(256, '\n');
@@ -293,39 +280,82 @@ int main() {
 
     cudaMemcpy(d_inputImage, h_input_points.data(), imageBytes, cudaMemcpyHostToDevice);
 
-    std::vector<Point> h_centroids(K);
+    std::vector<Point> h_centroids;
     std::mt19937 rng(static_cast<unsigned int>(time(0)));
     std::uniform_int_distribution<int> dist(0, numPoints - 1);
 
-    // for (int i = 0; i < K; i++) {
-    //     h_centroids[i] = h_input_points[dist(rng)];
-    // }
-
-    dim3 blockDim(THREAD_X, THREAD_Y);
-    dim3 gridDim(((IMG_WIDTH)+THREAD_X-1)/THREAD_X, ((IMG_HEIGHT)+THREAD_Y-1)/THREAD_Y);
-
-
-    double* d_distances;
-    cudaMalloc(&d_distances, numPoints* sizeof(double));
-    cudaMemset(d_centroid_sums, 0, numPoints * sizeof(double));
-
+    // =================================================================================
+    // K-MEANS++ INITIALIZATION LOGIC (EDITED SECTION)
+    // =================================================================================
+    
+    // Choose the first centroid uniformly at random
     int first_idx = dist(rng);
     h_centroids.push_back(h_input_points[first_idx]);
-    while(h_centroids.size() < K){
-        
     
+    // Allocate memory for initialization steps
+    double* d_distances;
+    double* d_partial_sum;
+    int* d_new_index;
+    cudaMalloc(&d_distances, numPoints * sizeof(double));
+    cudaMalloc(&d_new_index, sizeof(int));
+
+    // Configure launch parameters
+    dim3 gridDim(((IMG_WIDTH)+THREAD_X-1)/THREAD_X, ((IMG_HEIGHT)+THREAD_Y-1)/THREAD_Y);
+    dim3 blockDim(THREAD_X, THREAD_Y);
+    int reductionGridSize = (numPoints + REDUCTION_BLOCK_SIZE - 1) / REDUCTION_BLOCK_SIZE;
+    cudaMalloc(&d_partial_sum, reductionGridSize * sizeof(double));
+    std::vector<double> h_partial_sums(reductionGridSize);
+
+    // Loop to choose the remaining K-1 centroids
+    while(h_centroids.size() < K){
+        int centroid_size = h_centroids.size();
+        cudaMemcpy(d_centroids, h_centroids.data(), centroid_size * sizeof(Point), cudaMemcpyHostToDevice);
+
+        kmeans_pp_init_p1<<<gridDim, blockDim>>>(d_distances, d_inputImage, d_centroids, numPoints, IMG_WIDTH, centroid_size);
+        
+        size_t shared_mem_size = REDUCTION_BLOCK_SIZE * sizeof(double);
+        reduction<<<reductionGridSize, REDUCTION_BLOCK_SIZE, shared_mem_size>>>(d_distances, d_partial_sum, numPoints);
+        
+        cudaMemcpy(h_partial_sums.data(), d_partial_sum, reductionGridSize * sizeof(double), cudaMemcpyDeviceToHost);
+        double total_sum = std::accumulate(h_partial_sums.begin(), h_partial_sums.end(), 0.0);
+
+        // Generate threshold and find the winning block
+        std::uniform_real_distribution<double> threshold_dist(0.0, total_sum);
+        double threshold = threshold_dist(rng);
+        
+        int winning_block = -1;
+        double cumulative_sum = 0.0;
+        for (int i = 0; i < reductionGridSize; ++i) {
+            cumulative_sum += h_partial_sums[i];
+            if (cumulative_sum >= threshold) {
+                winning_block = i;
+                threshold -= (cumulative_sum - h_partial_sums[i]); // Adjust threshold
+                break;
+            }
+        }
+        if (winning_block == -1) winning_block = reductionGridSize - 1;
+
+        kmeans_pp_init_p2<<<1, 1>>>(d_distances, d_new_index, numPoints, winning_block, threshold);
+
+        // Get the new index and add the point to our centroid list
+        int new_idx;
+        cudaMemcpy(&new_idx, d_new_index, sizeof(int), cudaMemcpyDeviceToHost);
+        h_centroids.push_back(h_input_points[new_idx]);
     }
 
+    // Free temporary memory used for initialization
+    cudaFree(d_distances);
+    cudaFree(d_partial_sum);
+    cudaFree(d_new_index);
+
     cudaMemcpy(d_centroids, h_centroids.data(), K * sizeof(Point), cudaMemcpyHostToDevice);
-
-
 
     const double init_time = std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - init_start).count();
     std::cout << "Initialization time (sec): " << std::fixed << std::setprecision(10) << init_time << '\n';
 
     const auto compute_start = std::chrono::steady_clock::now();
 
-    // --- MAIN K-MEANS LOOP ---
+    // --- MAIN K-MEANS LOOP (UNCHANGED) ---
     std::cout << "Running K-Means algorithm on GPU..." << std::endl;
     for (int iter = 0; iter < MAX_ITERATIONS; ++iter) {
         cudaMemset(d_centroid_sums, 0, K * sizeof(Point));
