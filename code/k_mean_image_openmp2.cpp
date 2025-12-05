@@ -38,10 +38,24 @@ void save_image_to_ppm(const std::string& filename, const std::vector<unsigned c
 }
 
 
-int main() {
+int main(int argc, char* argv[]) {
     const auto init_start = std::chrono::steady_clock::now();
     int IMG_WIDTH = 0;
     int IMG_HEIGHT = 0;
+
+    if (argc < 2) {
+        std::cerr << "Usage: " << argv[0] << " <num_threads>" << std::endl;
+        return 1;
+    }
+
+    int num_threads = std::atoi(argv[1]);
+    if (num_threads <= 0) {
+        std::cerr << "Error: Number of threads must be positive." << std::endl;
+        return 1;
+    }
+
+    omp_set_num_threads(num_threads);
+    std::cout << "Using " << num_threads << " threads for OpenMP parallel regions." << std::endl;
     
     const int K = 8; // number of clusters
     const int MAX_ITERATIONS = 20;
