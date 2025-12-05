@@ -18,11 +18,6 @@ struct Point {
     float r, g, b;
 };
 
-// =================================================================================
-// Helper Function (for saving the output)
-// =================================================================================
-
-// Error 8: Added the missing save_image_to_ppm function
 void save_image_to_ppm(const std::string& filename, const std::vector<unsigned char>& image_data, int width, int height) {
     std::ofstream file(filename, std::ios::out | std::ios::binary);
     if (!file) {
@@ -35,13 +30,8 @@ void save_image_to_ppm(const std::string& filename, const std::vector<unsigned c
     std::cout << "Successfully saved quantized image to '" << filename << "'" << std::endl;
 }
 
-// =================================================================================
-// CUDA Kernel (Device Code)
-// =================================================================================
 
-/**
- * A device helper function to calculate the squared distance between two colors.
- */
+// the squared distance between two colors.
 __device__ float color_distance_sq(Point p1, Point p2) {
     float dr = p1.r - p2.r;
     float dg = p1.g - p2.g;
@@ -49,9 +39,7 @@ __device__ float color_distance_sq(Point p1, Point p2) {
     return dr*dr + dg*dg + db*db;
 }
 
-/**
- * Kernel 1: Assigns each pixel to its nearest centroid.
- */
+// kernel 1 assigns each pixel to its nearest centroid.
 __global__ void assign_clusters_kernel(const Point* d_inputImage, int* d_clusterIds, const Point* d_centroids, int numPoints, int k, int width) {
     int pixelIndex = blockIdx.y * gridDim.x * blockDim.x + blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -71,9 +59,7 @@ __global__ void assign_clusters_kernel(const Point* d_inputImage, int* d_cluster
     d_clusterIds[pixelIndex] = best_centroid;
 }
 
-/**
- * Kernel 2: Sums the colors and counts for each cluster using atomic operations.
- */
+// kernel 2 sums the colors and counts for each cluster using atomic operations.
 __global__ void update_centroids_kernel(const Point* d_inputImage, const int* d_clusterIds, Point* d_sums, int* d_counts, int numPoints) {
     int pixelIndex = blockIdx.y * gridDim.x * blockDim.x + blockIdx.x * blockDim.x + threadIdx.x;
     
@@ -88,9 +74,7 @@ __global__ void update_centroids_kernel(const Point* d_inputImage, const int* d_
     atomicAdd(&(d_counts[clusterId]), 1);
 }
 
-/**
- * Kernel 3: Calculates the new average color for each centroid.
- */
+// kernel 3 calculates the new average color for each centroid.
 __global__ void calculate_new_centroids_kernel(Point* d_centroids, const Point* d_sums, const int* d_counts, int k) {
     int centroidIndex = blockIdx.x * blockDim.x + threadIdx.x;
     if (centroidIndex >= k) return;
@@ -104,9 +88,7 @@ __global__ void calculate_new_centroids_kernel(Point* d_centroids, const Point* 
     }
 }
 
-/**
- * Kernel 4: Generates the final output image from the clustering results.
- */
+// kernel 4 generates the final output image from the clustering results.
 __global__ void generate_output_image_kernel(Point* d_outputImage, const int* d_clusterIds, const Point* d_centroids, int numPoints) {
     int pixelIndex = blockIdx.y * gridDim.x * blockDim.x + blockIdx.x * blockDim.x + threadIdx.x;
     if (pixelIndex >= numPoints) return;
@@ -115,9 +97,6 @@ __global__ void generate_output_image_kernel(Point* d_outputImage, const int* d_
     d_outputImage[pixelIndex] = d_centroids[clusterId];
 }
 
-// =================================================================================
-// Host Code
-// =================================================================================
 
 int main() {
     const auto init_start = std::chrono::steady_clock::now();
@@ -142,10 +121,10 @@ int main() {
     }
 
     std::string line;
-    ppm_file >> line; // Read "P6"
+    ppm_file >> line;
     while (ppm_file.peek() == '\n' || ppm_file.peek() == '#') { ppm_file.ignore(256, '\n'); }
     ppm_file >> IMG_WIDTH >> IMG_HEIGHT;
-    ppm_file.ignore(256, '\n'); // Skip max value line
+    ppm_file.ignore(256, '\n');
     ppm_file.ignore(256, '\n');
 
     std::cout << "Reading image '" << inputFilename << "' (" << IMG_WIDTH << "x" << IMG_HEIGHT << ")" << std::endl;
@@ -163,7 +142,6 @@ int main() {
     int numPoints = IMG_WIDTH * IMG_HEIGHT;
     int imageBytes = numPoints * sizeof(Point);
 
-    // Error 4: Declared each pointer on its own or with a star
     Point* d_inputImage;
     Point* d_outputImage;
     Point* d_centroids;
@@ -178,7 +156,7 @@ int main() {
     cudaMalloc(&d_sums, K * sizeof(Point));
     cudaMalloc(&d_counts, K * sizeof(int));
 
-    // Error 5: Used .data() to get the pointer from the vector
+    // load input image to device
     cudaMemcpy(d_inputImage, h_input_points.data(), imageBytes, cudaMemcpyHostToDevice);
 
     // Initialize centroids by picking random pixels

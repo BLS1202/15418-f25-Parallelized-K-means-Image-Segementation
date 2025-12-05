@@ -19,10 +19,7 @@ struct Point {
     float r, g, b;
 };
 
-// =================================================================================
-// Helper Function (Host)
-// =================================================================================
-
+// helper host
 void save_image_to_ppm(const std::string& filename, const std::vector<unsigned char>& image_data, int width, int height) {
     std::ofstream file(filename, std::ios::out | std::ios::binary);
     if (!file) {
@@ -35,10 +32,7 @@ void save_image_to_ppm(const std::string& filename, const std::vector<unsigned c
     std::cout << "Successfully saved quantized image to '" << filename << "'" << std::endl;
 }
 
-// =================================================================================
-// CUDA Kernels and Device Functions
-// =================================================================================
-
+// device
 __device__ float color_distance_sq(Point p1, Point p2) {
     float dr = p1.r - p2.r;
     float dg = p1.g - p2.g;
@@ -46,13 +40,9 @@ __device__ float color_distance_sq(Point p1, Point p2) {
     return dr*dr + dg*dg + db*db;
 }
 
-/**
- * The main K-means kernel, corrected to use a parallel reduction in shared memory.
- * This kernel performs the ASSIGNMENT and SUMMATION steps for one iteration.
- */
+// kernel 1 assignment and sum
 __global__ void k_means_v2(Point* d_inputImage, Point* d_centroid_sums, 
     int* d_counts, Point* d_centroids, int numPoints, int width) {
-    // --- SETUP ---
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
     int pixelIndex = y * width + x;
@@ -70,16 +60,16 @@ __global__ void k_means_v2(Point* d_inputImage, Point* d_centroid_sums,
         data_point[thread_num] = d_inputImage[pixelIndex];
     }
 
-    // 1. Initialize the shared memory for sums/counts for this block.
+    // Initialize the shared memory for sums/counts for this block.
     if (thread_num < K) {
         partial_sums[thread_num] = {0.0f, 0.0f, 0.0f};
         partial_counts[thread_num] = 0;
         centroids_W[thread_num] = d_centroids[thread_num];
     }
 
-    __syncthreads(); // Ensure all pixel data is loaded before proceeding
+    __syncthreads();
 
-    // --- ASSIGNMENT STEP ---
+    // assignment
     if (pixelIndex < numPoints) {
         Point pixelColor = data_point[thread_num];
         float min_dist = 1e30f;
@@ -92,23 +82,16 @@ __global__ void k_means_v2(Point* d_inputImage, Point* d_centroid_sums,
                 best_centroid_id = i;
             }
         }
-        clusterIds[thread_num] = best_centroid_id;
+
+        atomicAdd(&partial_sums[best_centroid_id].r, data_point[thread_num].r);
+        atomicAdd(&partial_sums[best_centroid_id].g, data_point[thread_num].g);
+        atomicAdd(&partial_sums[best_centroid_id].b, data_point[thread_num].b);
+        atomicAdd(&partial_counts[best_centroid_id], 1);
+
     }
-    __syncthreads(); // Ensure all threads have found their cluster ID
+    __syncthreads();
 
-    // --- UPDATE STEP (THE FIX: Parallel Reduction in Shared Memory) ---
-
-    // 2. Each thread atomically adds its pixel's data to the correct shared memory bucket.
-    if (pixelIndex < numPoints) {
-        int clusterId = clusterIds[thread_num];
-        atomicAdd(&partial_sums[clusterId].r, data_point[thread_num].r);
-        atomicAdd(&partial_sums[clusterId].g, data_point[thread_num].g);
-        atomicAdd(&partial_sums[clusterId].b, data_point[thread_num].b);
-        atomicAdd(&partial_counts[clusterId], 1);
-    }
-    __syncthreads(); // Ensure all threads have contributed their data
-
-    // 3. A single thread adds the block's total sums to the global memory sums.
+    // one thread: adds the block's total sums to the global memory sums.
     if (thread_num == 0) {
         for (int i = 0; i < K; i++) {
             if (partial_counts[i] > 0) {
@@ -121,10 +104,8 @@ __global__ void k_means_v2(Point* d_inputImage, Point* d_centroid_sums,
     }
 }
 
-/**
- * Helper Kernel 1: Performs the division to calculate new centroid averages.
- * This provides the necessary global synchronization point between iterations.
- */
+
+// kernel 2 calculate new centroid averages
 __global__ void update_centroids(Point* d_centroids, Point* d_centroid_sums, int* d_counts) {
     int i = threadIdx.x;
     if (i >= K) return;
@@ -135,10 +116,7 @@ __global__ void update_centroids(Point* d_centroids, Point* d_centroid_sums, int
     }
 }
 
-/**
- * Helper Kernel 2: Generates the final output image after all iterations are done.
- * It assigns each pixel the color of its final, converged centroid.
- */
+// kernal 3 get output image
 __global__ void generate_output_image(Point* d_outputImage, Point* d_inputImage, Point* d_centroids, int numPoints, int width) {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -149,14 +127,13 @@ __global__ void generate_output_image(Point* d_outputImage, Point* d_inputImage,
 
     if (pixelIndex >= numPoints) return;
 
-    // Step 1: Have the first K threads load the global centroids into shared memory.
+    // load the global centroids into shared memory.
     if (thread_num < K) {
         centroids_W[thread_num] = d_centroids[thread_num];
     }
 
     __syncthreads();
-
-    // Now it is safe for all threads to read from centroids_W.
+    
     Point pixelColor = d_inputImage[pixelIndex];
     float min_dist = 1e30f;
     int best_centroid_id = 0;
@@ -172,10 +149,7 @@ __global__ void generate_output_image(Point* d_outputImage, Point* d_inputImage,
 }
 
 
-// =================================================================================
-// Host Code (main function)
-// =================================================================================
-
+// host
 int main() {
     const auto init_start = std::chrono::steady_clock::now();
     int MAX_ITERATIONS = 20;
@@ -198,7 +172,7 @@ int main() {
     }
 
     std::string line;
-    ppm_file >> line; // Read "P6"
+    ppm_file >> line; 
     while (ppm_file.peek() == '\n' || ppm_file.peek() == '#') { ppm_file.ignore(256, '\n'); }
     ppm_file >> IMG_WIDTH >> IMG_HEIGHT;
     ppm_file.ignore(256, '\n');
@@ -250,7 +224,7 @@ int main() {
 
     const auto compute_start = std::chrono::steady_clock::now();
 
-    // --- MAIN K-MEANS LOOP ---
+    // k means
     std::cout << "Running K-Means algorithm on GPU..." << std::endl;
     for (int iter = 0; iter < MAX_ITERATIONS; ++iter) {
         cudaMemset(d_centroid_sums, 0, K * sizeof(Point));

@@ -53,7 +53,7 @@ int main() {
     
     // reading from a file
     std::vector<Point> points;
-    std::string inputFilename = "camera_man.ppm"; // PPM file name
+    std::string inputFilename = "../img/camera_man.ppm"; // PPM file name
 
     std::ifstream ppm_file(inputFilename, std::ios::in | std::ios::binary);
     if (!ppm_file) {
@@ -85,7 +85,6 @@ int main() {
     std::mt19937 rng(static_cast<unsigned int>(time(0)));
     std::uniform_int_distribution<int> dist(0, points.size() - 1);
     for (int i = 0; i < K; ++i) {
-        // pick a random pixel from the image as an initial centroid
         centroids.push_back(points[dist(rng)]);
     }
 
@@ -144,12 +143,8 @@ int main() {
 
         // convergence
         if (changed == 0) {
-            //std::cout << "Convergence reached at iteration " << iter + 1 << std::endl;
             break;
-        } /* else {
-            // std::cout << "Iteration " << iter + 1 << " complete." << std::endl;
-    
-        } */
+        }
     }
 
     // update the image with the new colors
