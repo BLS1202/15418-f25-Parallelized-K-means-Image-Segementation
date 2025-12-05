@@ -19,7 +19,7 @@ public:
     virtual void stepKMeansIteration() = 0;
     // --- Concrete Function ---
     // This function can be shared by all derived classes without changes.
-    bool isKMeansDone() const;
+    virtual bool isKMeansDone() const;
 protected: // Use 'protected' so derived classes (CudaRenderer, etc.) can access these.
     
     // --- Common Image Properties ---

@@ -1,51 +1,48 @@
+#ifndef CUDA_RENDERER_H
+#define CUDA_RENDERER_H
 
-#pragma once
-#include "Renderer.h"
-class Image;
+#include "../Image.h"
+#include "../Renderer.h"
+#include <cuda_runtime.h>
 
-struct float4;
-class CUDARenderer : public Renderer {
+class CudaRenderer : public Renderer{
 public:
-    // Constructor: Allocates all GPU memory for display and K-Means.
-    CudaRenderer(Image* image);
-
-    // Destructor: Frees all allocated GPU memory.
+    // Constructor / Destructor
+    CudaRenderer(Image* image, int k = 8);
     virtual ~CudaRenderer();
 
-    // Fetches the current rendered image from the GPU for display.
-    // The caller is responsible for deleting the returned Image object.
-    Image* getDisplayImage();
-
-    // --- K-Means Control Functions ---
-
-    // Resets the algorithm, picks K random centroids, and resets the iteration count.
-    void startKMeansSegmentation();
-
-    // Executes a single iteration of the K-Means algorithm.
-    void stepKMeansIteration();
-
-    // Checks if the algorithm has completed all its iterations.
-    bool isKMeansDone() const;
-
-    bool isKMeansDone() const;
+    // HPCRenderer interface
+    void startKMeansSegmentation() override;
+    void stepKMeansIteration() override;
+    bool isKMeansDone() const override;
+    Image* getDisplayImage() override;
 
 private:
-    // --- Display & Image Properties ---
+    // Image dimensions and K
     int m_width;
     int m_height;
     int m_numPoints;
-    float4* d_outputImage; // Buffer for the image sent to the screen
+    int m_k;
 
-    // --- K-Means State ---
-    // Configuration
-    int m_k;                // Number of clusters
-    int m_maxIterations;    // Stop after this many iterations
-    int m_currentIteration; // The current iteration number
+    // Iteration control
+    int m_currentIteration;
+    int m_maxIterations;
 
-    // GPU Buffers for the K-Means Algorithm
-    float4* d_inputImage;       // Original image pixel colors
-    int*    d_clusterIds;   // Assigned cluster for each pixel
-    float4* d_centroids;    // Color of each of the K centroids
-    float4* d_sums;         // Temporary buffer for summing cluster colors
-    int*    d_counts;       // Temporary buffer for counting points in clusters
+    // Host-side display image
+    Image* m_displayImage;
+
+    // GPU buffers
+    float4* d_inputImage;
+    float4* d_outputImage;
+    float4* d_centroids;
+    float4* d_centroid_sums;
+    int*    d_counts;
+    int*    d_clusterIds;
+
+    // CUDA block/grid configuration
+    dim3 m_blockDim;
+    dim3 m_gridDim;
 };
+
+#endif // CUDA_RENDERER_H
+
