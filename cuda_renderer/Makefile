@@ -40,97 +40,79 @@
 # 	rm -f $(OBJECTS) $(EXECUTABLE)
 # 	@echo "Cleanup complete."
 
-
 # Executable name
-PROG = kmeans
+EXEC = kmeans_renderer
 
 # Compilers
 CXX = g++
 NVCC = nvcc
 
-# --- Source Files ---
-# List all C++ source files (to be compiled with g++)
-SRCS_CPP = \
-    main.cpp \
-    lib/image.cpp \
-    lib/lodepng.cpp \
-    Renderer.cpp \
-    renderer_hpc/HPCRenderer.cpp \
-    renderer_openmp/OpenMPRenderer.cpp
+# --- Compiler Flags ---
+# CXXFLAGS: Flags for the C++ compiler (g++)
+# -O3: High optimization level
+# -Wall: Enable all warnings
+# -std=c++11: Use the C++11 standard (or c++14, c++17)
+# -fopenmp: Enable OpenMP support
+CXXFLAGS = -O3 -Wall -std=c++11 -fopenmp
 
-# List all CUDA source files (to be compiled with nvcc)
-# Note: We list the .cpp file, but it will be compiled with nvcc
-SRCS_CU = \
-    renderer_cuda/CudaRenderer.cpp
+# NVCCFLAGS: Flags for the CUDA compiler (nvcc)
+# -O3: Optimization level
+# -std=c++11: C++ standard for host code
+# -arch=sm_75: Target GPU architecture. CHANGE THIS to match your GPU!
+#             (e.g., sm_61 for a GTX 1070, sm_86 for an RTX 3080)
+# -Xcompiler -fopenmp: Pass the -fopenmp flag to the host compiler (g++)
+NVCCFLAGS = -O3 -std=c++11 -arch=sm_75 -Xcompiler -fopenmp
 
-# Generate object file names from source files
-OBJS = $(SRCS_CPP:.cpp=.o) $(SRCS_CU:.cpp=.o)
+# --- Linker Flags ---
+# LDFLAGS: Flags passed to the linker
+# -lglut, -lGL, -lGLU: OpenGL libraries
+# -lcudart: CUDA runtime library
+# -fopenmp: OpenMP library (needed for linking too)
+LDFLAGS = -lglut -lGL -lGLU -lcudart -fopenmp
 
-# --- Compiler and Linker Flags ---
+# --- Project Files ---
+# Include directories
+# We need to tell the compiler where to find header files.
+INCLUDES = -I. \
+           -Irenderer_cuda \
+           -Irenderer_openMP \
+           -ISimpleRenderer
 
-# Include paths for all compilers
-INCLUDES = \
-    -Ilib \
-    -Irenderer_hpc \
-    -Irenderer_openmp \
-    -Irenderer_cuda
+# C++ source files
+CXX_SRCS = main.cpp \
+           Image.cpp
 
-# C++ compiler flags
-# -O3 for optimization, -Wall for warnings, -fopenmp for OpenMP
-CXXFLAGS = -O3 -Wall -std=c++11 -fopenmp $(INCLUDES)
+# CUDA source files (.cu)
+# NOTE: OpenMPRenderer.cu and HPCRenderer.cu are being compiled with nvcc
+# because of their .cu extension. This works, but they could be .cpp files.
+CUDA_SRCS = renderer_cuda/CUDARenderer.cu \
+            renderer_openMP/OpenMPRenderer.cu \
+            SimpleRenderer/HPCRenderer.cu
 
-# CUDA compiler flags
-# TODO: Change -arch=sm_XX to match your GPU's compute capability if needed
-NVCCFLAGS = -O3 -arch=sm_35 -rdc=true --compiler-options -fPIC $(INCLUDES)
-
-# Linker flags
-# -fopenmp is needed here as well for linking
-LDFLAGS = -fopenmp
-
-# Libraries to link against (OpenGL, CUDA runtime)
-LIBS = -lglut -lGL -lGLEW -lcudart
-
+# Object files are derived automatically from source files
+OBJS = $(CXX_SRCS:.cpp=.o) $(CUDA_SRCS:.cu=.o)
 
 # --- Build Rules ---
 
-# Default target: build the executable
-all: $(PROG)
+# The default target: build the executable
+all: $(EXEC)
 
 # Rule to link the final executable
-$(PROG): $(OBJS)
-	$(CXX) $(LDFLAGS) -o $(PROG) $(OBJS) $(LIBS)
+# We use nvcc for linking because it knows how to correctly link CUDA code.
+$(EXEC): $(OBJS)
+	$(NVCC) $(NVCCFLAGS) $(INCLUDES) -o $@ $^ $(LDFLAGS)
 
-# Rule to compile a C++ source file into an object file
+# Rule to compile a .cpp file into a .o file
 %.o: %.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
-# Special rule to compile the CUDA C++ source file with nvcc
-# This pattern matches the specific CudaRenderer source file
-renderer_cuda/CudaRenderer.o: renderer_cuda/CudaRenderer.cpp
-	$(NVCC) $(NVCCFLAGS) -c $< -o $@
+# Rule to compile a .cu file into a .o file
+# This single rule correctly handles files in subdirectories.
+%.o: %.cu
+	$(NVCC) $(NVCCFLAGS) $(INCLUDES) -c $< -o $@
 
-# --- Dependency Generation (Advanced but recommended) ---
-# This automatically figures out which .h files are needed by each .cpp file
-
-# Generate dependency files (.d)
-DEPFLAGS = -MMD -MP
-
-# Include dependency files if they exist
--include $(OBJS:.o=.d)
-
-# Modify the compile rules to generate dependency files
-%.o: %.cpp
-	$(CXX) $(CXXFLAGS) $(DEPFLAGS) -c $< -o $@
-
-renderer_cuda/CudaRenderer.o: renderer_cuda/CudaRenderer.cpp
-	$(NVCC) $(NVCCFLAGS) --compiler-options "$(DEPFLAGS)" -c $< -o $@
-
-
-# --- Cleanup ---
-
-# Rule to remove generated files
+# Rule to clean up the project directory
 clean:
-	rm -f $(PROG) $(OBJS)
-	rm -f $(OBJS:.o=.d) # Remove dependency files as well
+	rm -f $(EXEC) $(OBJS)
 
 .PHONY: all clean
