@@ -10,11 +10,18 @@
 #include <limits>
 
 
-// =================================================================================
-// CUDA Kernel (Device Code)
-// =================================================================================
 
-// --- AFTER (This correctly flips the image during the copy) ---
+
+struct Point {
+    double r, g, b;
+    int clusterId;
+};
+
+// 3D Euclidean distance between colors
+inline double distance(Point p1, Point p2) {
+    return std::sqrt(std::pow(p1.r - p2.r, 2) + std::pow(p1.g - p2.g, 2) + std::pow(p1.b - p2.b, 2));
+}
+
 __global__ void kernel_copy_image(const float* in, float* out, int width, int height) {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -32,167 +39,26 @@ __global__ void kernel_copy_image(const float* in, float* out, int width, int he
     out[4 * dest_index + 3] = in[4 * source_index + 3];
 }
 
-/**
- * A device helper function to calculate the squared distance between two colors.
- */
-__device__ float color_distance_sq(float4 p1, float4 p2) {
-    // 1. Calculate the difference for each color channel (r, g, b).
-    // 2. Square each of those differences.
-    // 3. Return the sum of the squared differences.
-    float dx = p1.x - p2.x;
-    float dy = p1.y - p2.y;
-    float dz = p1.z - p2.z;
-    float dw = p1.w - p2.w; // NOTE: Typically not used for color, but included for completeness.
-    return dx*dx + dy*dy + dz*dz + dw*dw; // FIX: Usually distance is just in RGB space, not alpha.
-}
-/**
- * Kernel 1: Assigns each pixel to its nearest centroid.
- */
-// FIX: Added 'width' as a parameter because kernels cannot access class members like 'm_width'.
-__global__ void assign_clusters_kernel(const float4* d_inputImage, int* d_clusterIds, const float4* d_centroids, int numPoints, int k, int width) {
-    // 1. Get the unique global ID for the current thread.
-    // 2. Ensure the thread ID is within the bounds of the pixel array.
-    // 3. Get the color of the pixel this thread is responsible for.
-    // 4. Initialize variables to track the closest centroid found so far.
-    // 5. Loop through all K centroids to find the closest one.
-    //    a. Get the color of the current centroid.
-    //    b. Calculate the distance between the pixel and the centroid.
-    //    c. If this centroid is closer, update the minimum distance and the assigned cluster ID.
-    // 6. Store the ID of the closest cluster in the output array.
-
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
-    int pixelIndex = y * width + x; // FIX: Used 'width' parameter instead of 'm_width'. Added missing semicolon.
-    if(pixelIndex >= numPoints){
-        return;
-    }
-    //get color
-    float4 pixelColor = d_inputImage[pixelIndex]; // FIX: This variable was correct.
-    
-    //check centroid
-    int best_centroid = 0; // FIX: Declared and initialized 'best_centroid'.
-    float min_dist = 1e10f; // FIX: Initialize min_dist to a very large value.
-    float new_dist; // FIX: Declared 'new_dist' before the loop.
-
-    for(int i = 0; i < k; i++){ // FIX: Changed comma to semicolon in for loop condition.
-        new_dist = color_distance_sq(pixelColor, d_centroids[i]);
-        if(min_dist > new_dist){
-            min_dist = new_dist;
-            best_centroid = i;
-        }
-    }
-    d_clusterIds[pixelIndex] = best_centroid;
-}
-/**
- * Kernel 2: Sums the colors and counts for each cluster using atomic operations.
- */
-// FIX: Added 'width' as a parameter. Changed 'd_points' to 'd_inputImage' to match usage.
-__global__ void update_centroids_kernel(const float4* d_inputImage, const int* d_clusterIds, float4* d_sums, int* d_counts, int numPoints, int width) {
-    // 1. Get the unique global ID for the current thread.
-    // 2. Ensure the thread ID is within the bounds of the pixel array.
-    // 3. Find out which cluster this pixel was assigned to.
-    // 4. Get the color of this pixel.
-    // 5. Atomically add this pixel's color to the correct cluster's running total.
-    // 6. Atomically increment the pixel counter for that cluster.
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
-    
-    int pixelIndex = y * width + x; // FIX: Used 'width' parameter instead of 'm_width'.
-    if(pixelIndex >= numPoints){
-        return;
-    }
-
-    int clusterId = d_clusterIds[pixelIndex];
-    //get color
-    float4 pixelColor = d_inputImage[pixelIndex];
-    atomicAdd(&(d_sums[clusterId].x), pixelColor.x);
-    atomicAdd(&(d_sums[clusterId].y), pixelColor.y);
-    atomicAdd(&(d_sums[clusterId].z), pixelColor.z);
-    atomicAdd(&(d_sums[clusterId].w), pixelColor.w);
-    atomicAdd(&(d_counts[clusterId]), 1);
-}
-/**
- * Kernel 3: Calculates the new average color for each centroid.
- */
-__global__ void calculate_new_centroids_kernel(float4* d_centroids, const float4* d_sums, const int* d_counts, int k) {
-    // 1. Get the thread ID, which corresponds to the centroid index.
-    // 2. Ensure the thread ID is within the bounds of the centroid array (0 to K-1).
-    // 3. Get the total number of pixels assigned to this centroid.
-    // 4. If the count is greater than zero:
-    //    a. Get the total summed color for this cluster.
-    //    b. Calculate the new average color by dividing the sum by the count.
-    //    c. Update the centroid's color in the main centroid array.
-
-    // FIX: This kernel iterates over K centroids, not pixels. The index is the 1D thread ID.
-    int pixelIndex = blockIdx.x * blockDim.x + threadIdx.x;
-    if(pixelIndex >= k){
-        return;
-    }
-    
-    int count = d_counts[pixelIndex]; // FIX: This variable was correct.
-    if(count > 0){
-        float4 sum = d_sums[pixelIndex];
-        d_centroids[pixelIndex].x = sum.x/count;
-        d_centroids[pixelIndex].y = sum.y/count;
-        d_centroids[pixelIndex].z = sum.z/count;
-        d_centroids[pixelIndex].w = sum.w/count;
-    }
-    
-}
-/**
- * Kernel 4: Generates the final output image from the clustering results.
- */
-// FIX: Added 'width' as a parameter.
-__global__ void generate_output_image_kernel(float4* d_outputImage, const int* d_clusterIds, const float4* d_centroids, int numPoints, int width, int height) {
-    // 1. Get the unique global ID for the current thread.
-    // 2. Ensure the thread ID is within the bounds of the pixel array.
-    // 3. Find out which cluster this pixel belongs to.
-    // 4. Get the final color of that cluster's centroid.
-    // 5. Write this color to the corresponding pixel in the output image buffer.
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
-    int pixelIndex = y * width + x; // FIX: Used 'width' parameter instead of 'm_width'. Added missing semicolon.
-    if(pixelIndex >= numPoints){
-        return;
-    }
-    int clusterId = d_clusterIds[pixelIndex]; // FIX: This variable was correct.
-    float4 newColor = d_centroids[clusterId];
-
-    int flipped_y = height - 1 - y;
-    int output_index = flipped_y * width + x;
-
-    d_outputImage[output_index] = newColor;
-
-}
 
 
+HPCRenderer::HPCRenderer(Image* image) : Renderer(image){
 
-// =================================================================================
-// C++ Class Implementation (Host Code)
-// =================================================================================
-
-HPCRenderer::HPCRenderer(Image* image){
-
-    m_k = 3;
-    m_maxIterations = 50; // Increased iterations for better convergence
+    m_k = 8;
+    m_maxIterations = 20; 
     m_currentIteration = 0;
+    m_converged = false;
 
     m_width = image->width;
     m_height = image->height;
     m_numPoints = m_width * m_height;
 
-    size_t imageBytes = sizeof(float4) * m_width * m_height;
-
-    cudaMalloc(&d_centroids, m_k*sizeof(float4));
-    cudaMalloc(&d_clusterIds, m_numPoints*sizeof(int));
+    size_t imageBytes = sizeof(float4) * m_numPoints;
     cudaMalloc(&d_inputImage, imageBytes);
     cudaMalloc(&d_outputImage, imageBytes);
-    cudaMalloc(&d_sums, m_k*sizeof(float4));
-    cudaMalloc(&d_counts, m_k*sizeof(int));
-
 
     cudaMemcpy(d_inputImage, image->data, imageBytes, cudaMemcpyHostToDevice);
 
+    // Copy original image to output for initial display
     dim3 blockDim(16, 16);
     dim3 gridDim((m_width + blockDim.x - 1) / blockDim.x, 
                  (m_height + blockDim.y - 1) / blockDim.y);
@@ -206,22 +72,31 @@ HPCRenderer::HPCRenderer(Image* image){
     if (err != cudaSuccess) {
         fprintf(stderr, "CUDA Error after setup: %s\n", cudaGetErrorString(err));
     }
+
+    // Prepare host data for sequential K-Means by copying from GPU
+    std::vector<float4> h_inputImage(m_numPoints);
+    cudaMemcpy(h_inputImage.data(), d_inputImage, imageBytes, cudaMemcpyDeviceToHost);
+
+    m_points.resize(m_numPoints);
+    for (int i = 0; i < m_numPoints; ++i) {
+        m_points[i] = {
+            (double)h_inputImage[i].x * 255.0,
+            (double)h_inputImage[i].y * 255.0,
+            (double)h_inputImage[i].z * 255.0,
+            -1 // initial clusterId
+        };
+    }
 }
 
 HPCRenderer::~HPCRenderer(){
     cudaFree(d_inputImage);
     cudaFree(d_outputImage);
-    cudaFree(d_centroids);
-    cudaFree(d_clusterIds);
-    cudaFree(d_sums);
-    cudaFree(d_counts);
 }
 
 Image* HPCRenderer::getDisplayImage() {
     Image* h_image = new Image(m_width, m_height);
     size_t imageBytes = sizeof(float4) * m_width * m_height;
     
-    // Copy the contents of d_outputImage (device) to h_image->data (host).
     cudaMemcpy(h_image->data, d_outputImage, imageBytes, cudaMemcpyDeviceToHost);
 
     return h_image;
@@ -230,22 +105,18 @@ Image* HPCRenderer::getDisplayImage() {
 void HPCRenderer::startKMeansSegmentation() {
     std::cout << "Initializing K-Means segmentation..." << std::endl;
     
-    m_currentIteration = 0; 
+    m_currentIteration = 0;
+    m_converged = false;
 
-    // Create a host-side vector to hold the original image data
-    std::vector<float4> h_inputImage(m_numPoints);
-    cudaMemcpy(h_inputImage.data(), d_inputImage, sizeof(float4) * m_numPoints, cudaMemcpyDeviceToHost);
 
-    std::vector<float4> h_centroids;
+    m_centroids.clear();
     std::mt19937 rng(static_cast<unsigned int>(time(0)));
-    std::uniform_int_distribution<int> dist(0, m_numPoints - 1);
-    
-    // Populate the vector by randomly picking K pixels from the host copy of the image.
-    for(int i = 0; i < m_k; i++){
-        h_centroids.push_back(h_inputImage[dist(rng)]);
+    std::uniform_int_distribution<int> dist(0, m_points.size() - 1);
+    for (int i = 0; i < m_k; ++i) {
+        m_centroids.push_back(m_points[dist(rng)]);
     }
     
-    cudaMemcpy(d_centroids, h_centroids.data(), sizeof(float4)*m_k, cudaMemcpyHostToDevice);
+    std::cout << "K-Means initialized. Ready to start iterations." << std::endl;
 }
 
 void HPCRenderer::stepKMeansIteration() {
@@ -253,36 +124,74 @@ void HPCRenderer::stepKMeansIteration() {
         return;
     }
     
-    std::cout << "Running K-Means Iteration: " << m_currentIteration + 1 << std::endl;
+    // --- K-Means Iteration Logic (from k_mean_image.cpp) ---
+    bool changed = false;
 
+    // Assignment Step
+    for (auto& point : m_points) {
+        double min_dist = std::numeric_limits<double>::max();
+        int closest_centroid_id = -1;
+        for (int i = 0; i < m_k; ++i) {
+            double d = distance(point, m_centroids[i]);
+            if (d < min_dist) { min_dist = d; closest_centroid_id = i; }
+        }
+        if (point.clusterId != closest_centroid_id) {
+            point.clusterId = closest_centroid_id;
+            changed = true;
+        }
+    }
+
+    // Update Step
+    std::vector<Point> new_centroids(m_k, {0, 0, 0, -1});
+    std::vector<int> counts(m_k, 0);
+    for (const auto& point : m_points) {
+        int cluster_id = point.clusterId;
+        if(cluster_id != -1) {
+            new_centroids[cluster_id].r += point.r;
+            new_centroids[cluster_id].g += point.g;
+            new_centroids[cluster_id].b += point.b;
+            counts[cluster_id]++;
+        }
+    }
+    for (int i = 0; i < m_k; ++i) {
+        if (counts[i] > 0) {
+            m_centroids[i].r = new_centroids[i].r / counts[i];
+            m_centroids[i].g = new_centroids[i].g / counts[i];
+            m_centroids[i].b = new_centroids[i].b / counts[i];
+        }
+    }
+
+    // Convergence Check
+    if (!changed) {
+        m_converged = true;
+        std::cout << "K-Means converged after " << m_currentIteration << " iterations." << std::endl;
+    }
+
+    // --- Update the output image on the GPU for display ---
+    std::vector<float4> h_resultImage(m_numPoints);
+    for (size_t i = 0; i < m_points.size(); ++i) {
+        Point centroid_color = m_centroids[m_points[i].clusterId];
+        h_resultImage[i].x = static_cast<float>(centroid_color.r / 255.0);
+        h_resultImage[i].y = static_cast<float>(centroid_color.g / 255.0);
+        h_resultImage[i].z = static_cast<float>(centroid_color.b / 255.0);
+        h_resultImage[i].w = 1.0f; // Alpha
+    }
+
+
+    cudaMemcpy(d_inputImage, h_resultImage.data(), sizeof(float4) * m_numPoints, cudaMemcpyHostToDevice);
+    
     dim3 blockDim(16, 16);
     dim3 gridDim((m_width + blockDim.x - 1) / blockDim.x, 
                  (m_height + blockDim.y - 1) / blockDim.y);
-    
-    // Kernel for centroids (1D)
-    dim3 centroidGridDim((m_k + 255) / 256);
-    dim3 centroidBlockDim(256);
+    kernel_copy_image<<<gridDim, blockDim>>>(
+        (float*)d_inputImage, 
+        (float*)d_outputImage, 
+        m_width, 
+        m_height
+    );
 
-    assign_clusters_kernel<<<gridDim, blockDim>>>(d_inputImage, d_clusterIds, d_centroids, m_numPoints, m_k, m_width);
-    
-    cudaMemset(d_sums, 0, sizeof(float4)*m_k);
-    cudaMemset(d_counts, 0, sizeof(int)*m_k);
-    cudaDeviceSynchronize(); // Good practice to check for errors after kernels
-    
-
-    update_centroids_kernel<<<gridDim, blockDim>>>(d_inputImage, d_clusterIds, d_sums, d_counts, m_numPoints, m_width);
-    cudaDeviceSynchronize();
-    
-
-    calculate_new_centroids_kernel<<<centroidGridDim, centroidBlockDim>>>(d_centroids, d_sums, d_counts, m_k);
-    cudaDeviceSynchronize();
-    
-
-    generate_output_image_kernel<<<gridDim, blockDim>>>(d_outputImage, d_clusterIds, d_centroids, m_numPoints, m_width, m_height);
-    cudaDeviceSynchronize();
-    
     m_currentIteration++;
 }
 bool HPCRenderer::isKMeansDone() const {
-    return m_currentIteration >= m_maxIterations;
+    return m_currentIteration >= m_maxIterations || m_converged;
 }

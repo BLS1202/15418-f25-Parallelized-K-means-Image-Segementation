@@ -8,26 +8,21 @@
 #include <chrono>
 #include <iomanip>
 
-// --- Data Structures ---
 
-// >> CHANGED: Point now represents a color in RGB space, not a 2D coordinate <<
 struct Point {
     double r, g, b; // Using double for precision in centroid calculations
     int clusterId;
 };
 
-// >> REMOVED: The hardcoded Color struct is no longer needed. <<
-// struct Color { ... };
 
 
 // --- Helper Functions ---
 
-// >> CHANGED: Distance function now calculates 3D Euclidean distance between colors. <<
 double distance(Point p1, Point p2) {
     return std::sqrt(std::pow(p1.r - p2.r, 2) + std::pow(p1.g - p2.g, 2) + std::pow(p1.b - p2.b, 2));
 }
 
-// >> UNCHANGED: This function is perfect for our needs. <<
+
 void save_image_to_ppm(const std::string& filename, const std::vector<unsigned char>& image_data, int width, int height) {
     std::ofstream ppm_file(filename, std::ios::out | std::ios::binary);
     if (!ppm_file) {
@@ -50,8 +45,7 @@ int main() {
     int IMG_WIDTH = 0;
     int IMG_HEIGHT = 0;
     
-    // >> UNCHANGED: These can still be configured. <<
-    const int K = 8; // Number of clusters (dominant colors)
+    const int K = 8;
     const int MAX_ITERATIONS = 20;
 
     std::cout << "Starting K-Means Color Clustering..." << std::endl;
@@ -61,9 +55,8 @@ int main() {
 
     // --- K-Means Algorithm ---
     
-    // >> CHANGED: Step 1 is now reading from a file, not generating random points. <<
     std::vector<Point> points;
-    std::string inputFilename = "../img/camera_man.ppm"; // <-- IMPORTANT: Put your PPM file name here
+    std::string inputFilename = "../img/camera_man.ppm"; 
 
     std::ifstream ppm_file(inputFilename, std::ios::in | std::ios::binary);
     if (!ppm_file) {
@@ -72,7 +65,7 @@ int main() {
     }
     std::string line;
     int max_val;
-    ppm_file >> line; // Read "P6"
+    ppm_file >> line;
     while (ppm_file.peek() == '\n' || ppm_file.peek() == '#') { ppm_file.ignore(256, '\n'); }
     ppm_file >> IMG_WIDTH >> IMG_HEIGHT;
     ppm_file >> max_val;
@@ -84,7 +77,6 @@ int main() {
     ppm_file.read(reinterpret_cast<char*>(raw_pixel_data.data()), raw_pixel_data.size());
     ppm_file.close();
 
-    // Convert raw byte data into our vector of Point structs
     for (size_t i = 0; i < raw_pixel_data.size(); i += 3) {
         points.push_back({(double)raw_pixel_data[i], (double)raw_pixel_data[i+1], (double)raw_pixel_data[i+2], -1});
     }
@@ -95,11 +87,6 @@ int main() {
     std::mt19937 rng(static_cast<unsigned int>(time(0)));
     std::uniform_int_distribution<int> dist(0, points.size() - 1);
     
-    // for (int i = 0; i < K; ++i) {
-    //     // Pick a random pixel from the image as an initial centroid
-    //     centroids.push_back(points[dist(rng)]);
-    // }
-
     //for k_means++
     int first_idx = dist(rng);
     centroids.push_back(points[first_idx]);
@@ -137,7 +124,6 @@ int main() {
 
     const auto compute_start = std::chrono::steady_clock::now();
 
-    // 3. Run K-Means (The core loop is UNCHANGED logically!)
     for (int iter = 0; iter < MAX_ITERATIONS; ++iter) {
         bool changed = false;
         // Assignment Step
@@ -157,20 +143,20 @@ int main() {
         }
 
         // Update Step
-        std::vector<Point> new_centroids(K, {0, 0, 0, -1}); // >> Changed to {r,g,b,id}
+        std::vector<Point> new_centroids(K, {0, 0, 0, -1}); 
         std::vector<int> counts(K, 0);
         for (const auto& point : points) {
             int cluster_id = point.clusterId;
-            new_centroids[cluster_id].r += point.r; // >> Changed from .x to .r
-            new_centroids[cluster_id].g += point.g; // >> Changed from .y to .g
-            new_centroids[cluster_id].b += point.b; // >> ADDED for blue channel <<
+            new_centroids[cluster_id].r += point.r;
+            new_centroids[cluster_id].g += point.g; 
+            new_centroids[cluster_id].b += point.b; 
             counts[cluster_id]++;
         }
         for (int i = 0; i < K; ++i) {
             if (counts[i] > 0) {
-                centroids[i].r = new_centroids[i].r / counts[i]; // >> Changed from .x to .r
-                centroids[i].g = new_centroids[i].g / counts[i]; // >> Changed from .y to .g
-                centroids[i].b = new_centroids[i].b / counts[i]; // >> ADDED for blue channel <<
+                centroids[i].r = new_centroids[i].r / counts[i];
+                centroids[i].g = new_centroids[i].g / counts[i]; 
+                centroids[i].b = new_centroids[i].b / counts[i]; 
             }
         }
         // Convergence Check
@@ -182,8 +168,6 @@ int main() {
         } */
     }
 
-    // >> CHANGED: This whole section is new. We create the final image by replacing
-    //          each pixel's color with the color of the centroid it belongs to. <<
     const double compute_time = std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - compute_start).count();
     std::cout << "Computation time (sec): " << compute_time << '\n';
 

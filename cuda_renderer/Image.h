@@ -1,6 +1,5 @@
 #include <string>
 #include <vector>
-#pragma once
 
 class Image {
 public:

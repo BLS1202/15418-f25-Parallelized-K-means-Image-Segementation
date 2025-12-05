@@ -1,48 +1,50 @@
-#ifndef CUDA_RENDERER_H
-#define CUDA_RENDERER_H
+#pragma once
 
-#include "../Image.h"
 #include "../Renderer.h"
-#include <cuda_runtime.h>
+#include <vector>
 
-class CudaRenderer : public Renderer{
+
+class Image;
+
+class CUDARenderer : public Renderer {s
 public:
-    // Constructor / Destructor
-    CudaRenderer(Image* image, int k = 8);
-    virtual ~CudaRenderer();
 
-    // HPCRenderer interface
-    void startKMeansSegmentation() override;
-    void stepKMeansIteration() override;
-    bool isKMeansDone() const override;
+    CUDARenderer(Image* image);
+
+
+    ~CUDARenderer();
+
+
     Image* getDisplayImage() override;
 
+
+
+    void startKMeansSegmentation() override;
+
+
+    void stepKMeansIteration() override;
+
+
+    bool isKMeansDone() const override;
+
 private:
-    // Image dimensions and K
     int m_width;
     int m_height;
     int m_numPoints;
-    int m_k;
 
-    // Iteration control
-    int m_currentIteration;
-    int m_maxIterations;
 
-    // Host-side display image
-    Image* m_displayImage;
+    int m_k;                // Number of clusters
+    int m_maxIterations;    // Stop after this many iterations
+    int m_currentIteration; // The current iteration number
 
-    // GPU buffers
+
     float4* d_inputImage;
     float4* d_outputImage;
     float4* d_centroids;
     float4* d_centroid_sums;
     int*    d_counts;
-    int*    d_clusterIds;
+    
 
-    // CUDA block/grid configuration
-    dim3 m_blockDim;
-    dim3 m_gridDim;
+    std::vector<float4> h_input_points;
 };
-
-#endif // CUDA_RENDERER_H
 

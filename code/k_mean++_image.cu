@@ -15,7 +15,6 @@
 #define THREAD_Y 32
 #define BLOCKSIZE (THREAD_X * THREAD_Y) // 1024
 #define K 8
-// A smaller block size is often better for 1D reduction kernels
 #define REDUCTION_BLOCK_SIZE 256
 
 struct Point {
@@ -49,14 +48,6 @@ __device__ float color_distance_sq(Point p1, Point p2) {
     return dr*dr + dg*dg + db*db;
 }
 
-
-// =================================================================================
-// K-MEANS++ INITIALIZATION KERNELS (EDITED SECTION)
-// =================================================================================
-
-/**
- * K-Means++ Step 1: For each point, find the squared distance to the nearest existing centroid.
- */
 __global__ void kmeans_pp_init_p1(double* d_distances, const Point* d_inputImage, const Point* d_centroids,
                                   int numPoints, int width, int centroid_size){
 
@@ -78,9 +69,7 @@ __global__ void kmeans_pp_init_p1(double* d_distances, const Point* d_inputImage
     d_distances[pixelIndex] = min_d_sq;
 }
 
-/**
- * K-Means++ Step 2: Perform a parallel reduction to get the sum of distances for each block.
- */
+
 __global__ void reduction(const double* d_distances, double* d_partial_sum, int numPoints){
     extern __shared__ double s_data[];
     int tid = threadIdx.x;
@@ -101,9 +90,7 @@ __global__ void reduction(const double* d_distances, double* d_partial_sum, int 
     }
 }
 
-/**
- * K-Means++ Step 3: Find the new centroid by scanning within the chosen "winning" block.
- */
+
 __global__ void kmeans_pp_init_p2(const double* d_distances, int* d_new_index, int numPoints, int search_block, double threshold){
     int start_index = search_block * REDUCTION_BLOCK_SIZE;
     int end_index = min((start_index + REDUCTION_BLOCK_SIZE), numPoints);
@@ -283,10 +270,6 @@ int main() {
     std::vector<Point> h_centroids;
     std::mt19937 rng(static_cast<unsigned int>(time(0)));
     std::uniform_int_distribution<int> dist(0, numPoints - 1);
-
-    // =================================================================================
-    // K-MEANS++ INITIALIZATION LOGIC (EDITED SECTION)
-    // =================================================================================
     
     // Choose the first centroid uniformly at random
     int first_idx = dist(rng);
@@ -355,7 +338,6 @@ int main() {
 
     const auto compute_start = std::chrono::steady_clock::now();
 
-    // --- MAIN K-MEANS LOOP (UNCHANGED) ---
     std::cout << "Running K-Means algorithm on GPU..." << std::endl;
     for (int iter = 0; iter < MAX_ITERATIONS; ++iter) {
         cudaMemset(d_centroid_sums, 0, K * sizeof(Point));
