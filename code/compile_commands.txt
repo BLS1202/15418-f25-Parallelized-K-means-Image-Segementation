@@ -1,19 +1,30 @@
 basic cpu version:
-g++ -c k_mean_image.cpp    
-g++ k_mean_image.o -o k_means_normal
-./k_means_normal
+g++ -c k_mean_image.cpp libraries/Image.cpp
+g++ k_mean_image.o Image.o -o k_means_normal
+./k_means_normal <input_image.jpg> <output_image.jpg>
 
 -----------------------------------------------------
-basic gpu version:
-nvcc k_mean_image_cuda.cu -o k_means_cuda -ccbin g++-11
-./k_means_cuda
+cuda gpu version:
+g++ -c libraries/Image.cpp -o Image.o
+nvcc -c k_mean_memory.cu -o k_mean_memory.o -ccbin g++-11
+nvcc Image.o k_mean_memory.o -o k_means_memory
+./k_means_memory <input_image.jpg> <output_image.jpg>
 
 -----------------------------------------------------
 openmp:
+g++ -c libraries/Image.cpp -o Image.o
 g++ -c k_mean_image_openmp1.cpp -fopenmp
-g++ k_mean_image_openmp1.o -fopenmp -o k_mean_image_openmp1
-./k_mean_image_openmp1
+g++ Image.o k_mean_image_openmp1.o -fopenmp -o k_mean_image_openmp1
+./k_mean_image_openmp1 num_threads <input_image.jpg> <output_image.jpg>
 
+g++ -c libraries/Image.cpp -o Image.o
 g++ -c k_mean_image_openmp2.cpp -fopenmp
-g++ k_mean_image_openmp2.o -fopenmp -o k_mean_image_openmp2
-./k_mean_image_openmp2
+g++ Image.o k_mean_image_openmp2.o -fopenmp -o k_mean_image_openmp2
+./k_mean_image_openmp2 num_threads <input_image.jpg> <output_image.jpg>
+
+
+-----------------------------------------------------
+kmeans++ version:
+g++ -c k_mean++_norm.cpp libraries/Image.cpp
+g++ k_mean++_norm.o Image.o -o k_means++_normal
+./k_means++_normal<input_image.jpg> <output_image.jpg>

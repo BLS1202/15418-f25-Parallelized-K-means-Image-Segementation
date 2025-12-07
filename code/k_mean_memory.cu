@@ -11,10 +11,10 @@
 #include <iomanip>
 #include "libraries/Image.h"
 
-#define THREAD_X 4
-#define THREAD_Y 4
+#define THREAD_X 8
+#define THREAD_Y 8
 #define BLOCKSIZE (THREAD_X * THREAD_Y) // 1024
-#define K 100
+#define K 4
 
 struct Point {
     float r, g, b;
@@ -38,7 +38,6 @@ __global__ void k_means_v2(Point* d_inputImage, Point* d_centroid_sums,
 
     // Shared memory for this block's pixel data, cluster assignments, and partial sums
     __shared__ Point data_point[BLOCKSIZE];
-    __shared__ int clusterIds[BLOCKSIZE];
     __shared__ Point partial_sums[K];
     __shared__ int partial_counts[K];
     __shared__ Point centroids_W[K];
@@ -177,11 +176,11 @@ int main(int argc, char** argv) {
 
         size_t data_index = i * 4; 
 
-        double r = (double)(img_data[data_index + 0] * 255.0f); 
-        double g = (double)(img_data[data_index + 1] * 255.0f); 
-        double b = (double)(img_data[data_index + 2] * 255.0f); 
+        float r = (float)(img_data[data_index + 0] * 255.0f); 
+        float g = (float)(img_data[data_index + 1] * 255.0f); 
+        float b = (float)(img_data[data_index + 2] * 255.0f); 
 
-        h_input_points.push_back({r, g, b, -1});
+        h_input_points.push_back(Point{r, g, b});
     }
 
     std::cout << "Loaded " << h_input_points.size() << " pixels as data points." << std::endl;

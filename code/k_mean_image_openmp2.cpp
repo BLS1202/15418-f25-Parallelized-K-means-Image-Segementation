@@ -9,6 +9,7 @@
 #include <omp.h>
 #include <chrono>
 #include <iomanip>
+#include "libraries/Image.h"
 
 struct Point {
     double r, g, b;
@@ -38,13 +39,36 @@ void save_image_to_ppm(const std::string& filename, const std::vector<unsigned c
 }
 
 
-int main() {
+int main(int argc, char* argv[]) {
     const auto init_start = std::chrono::steady_clock::now();
     int IMG_WIDTH = 0;
     int IMG_HEIGHT = 0;
     
     const int K = 8; // number of clusters
     const int MAX_ITERATIONS = 20;
+
+    
+    if (argc < 4) {
+        std::cerr << "Usage: " << argv[0] << " <num_threads>" << "<input_image.jpg>" << "<output_image.jpg>" << std::endl;
+        return 1;
+    }
+
+    int num_threads = std::atoi(argv[1]);
+    if (num_threads <= 0) {
+        std::cerr << "Error: Number of threads must be positive." << std::endl;
+        return 1;
+    }
+
+    omp_set_num_threads(num_threads);
+    std::cout << "Using " << num_threads << " threads for OpenMP parallel regions." << std::endl;
+    
+    std::string imagePath = argv[2];
+    std::string outPath = argv[3];
+    Image* originalImage = new Image(0, 0);
+    if (!originalImage->loadJPG(imagePath)) {
+        delete originalImage;
+        return 1;
+    }
 
     std::cout << "Starting K-Means Color Clustering..." << std::endl;
     std::cout << "  Clusters (K): " << K << std::endl;
@@ -53,32 +77,25 @@ int main() {
     
     // reading from a file
     std::vector<Point> points;
-    std::string inputFilename = "camera_man.ppm"; // PPM file name
+    IMG_WIDTH = originalImage->width;   
+    IMG_HEIGHT = originalImage->height; 
 
-    std::ifstream ppm_file(inputFilename, std::ios::in | std::ios::binary);
-    if (!ppm_file) {
-        std::cerr << "Error: Could not open file '" << inputFilename << "'. Please check the name." << std::endl;
-        return 1;
+    float* img_data = originalImage -> data;
+    size_t total_pixels = (size_t)IMG_WIDTH * IMG_HEIGHT;
+
+    for (size_t i = 0; i < total_pixels; ++i) {
+
+        size_t data_index = i * 4; 
+
+        double r = (double)(img_data[data_index + 0] * 255.0f); 
+        double g = (double)(img_data[data_index + 1] * 255.0f); 
+        double b = (double)(img_data[data_index + 2] * 255.0f); 
+
+        points.push_back({r, g, b, -1});
     }
-    std::string line;
-    int max_val;
-    ppm_file >> line; 
-    while (ppm_file.peek() == '\n' || ppm_file.peek() == '#') { ppm_file.ignore(256, '\n'); }
-    ppm_file >> IMG_WIDTH >> IMG_HEIGHT;
-    ppm_file >> max_val;
-    ppm_file.ignore(256, '\n');
 
-    std::cout << "Reading image '" << inputFilename << "' (" << IMG_WIDTH << "x" << IMG_HEIGHT << ")" << std::endl;
-    
-    std::vector<unsigned char> raw_pixel_data(IMG_WIDTH * IMG_HEIGHT * 3);
-    ppm_file.read(reinterpret_cast<char*>(raw_pixel_data.data()), raw_pixel_data.size());
-    ppm_file.close();
-
-    // Convert raw byte data into point structs
-    for (size_t i = 0; i < raw_pixel_data.size(); i += 3) {
-        points.push_back({(double)raw_pixel_data[i], (double)raw_pixel_data[i+1], (double)raw_pixel_data[i+2], -1});
-    }
     std::cout << "Loaded " << points.size() << " pixels as data points." << std::endl;
+
 
     // initialize Centroids
     std::vector<Point> centroids;
@@ -178,8 +195,7 @@ int main() {
 
 
     // write the array to a file
-    save_image_to_ppm("kmeans_quantized.ppm", result_image, IMG_WIDTH, IMG_HEIGHT);
-
+    originalImage -> save_image_to_jpg(outPath, result_image, IMG_WIDTH, IMG_HEIGHT, 90);
 
     return 0;
 }
