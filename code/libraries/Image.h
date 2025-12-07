@@ -14,6 +14,7 @@ public:
     // Load a PPM image from a file
     bool loadPPM(const std::string& filename);
     bool loadJPG(const std::string& filename);
+    bool save_image_to_jpg(const std::string& filename, const std::vector<unsigned char>& image_data, int width, int height, int quality);
 
 private:
     // Disable copy constructor and assignment operator

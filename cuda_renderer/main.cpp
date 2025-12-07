@@ -2,7 +2,6 @@
 #include <string>
 #include "platformgl.h" 
 #include "Image.h"
-
 #include "SimpleRenderer/HPCRenderer.h"
 #include "renderer_openMP/OpenMPrenderer.h"
 #include "renderer_cuda/CUDARenderer.h"
@@ -54,7 +53,7 @@ void runNextClusteringStep(int value) {
 // --- Main Application Entry Point ---
 int main(int argc, char** argv) {
     if (argc < 3) {
-        std::cerr << "Usage: " << argv[0] << " <renderer> <input_image.ppm>" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " <renderer> <input_image.jpg>" << std::endl;
         std::cerr << "  Available renderers: simple, openmp, cuda" << std::endl;
         return 1;
     }
@@ -63,7 +62,7 @@ int main(int argc, char** argv) {
     std::string imagePath = argv[2];
 
     Image* originalImage = new Image(0, 0);
-    if (!originalImage->loadPPM(imagePath)) {
+    if (!originalImage->loadJPG(imagePath)) {
         delete originalImage;
         return 1;
     }

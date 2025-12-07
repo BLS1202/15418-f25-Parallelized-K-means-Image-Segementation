@@ -45,7 +45,7 @@ int main() {
     int IMG_WIDTH = 0;
     int IMG_HEIGHT = 0;
     
-    const int K = 8;
+    const int K = 4;
     const int MAX_ITERATIONS = 20;
 
     std::cout << "Starting K-Means Color Clustering..." << std::endl;
@@ -94,6 +94,8 @@ int main() {
         std::vector<double> distancesSquared;
         distancesSquared.reserve(points.size());
         double upper_limit = 0.0;
+
+
         for(int i = 0; i < points.size(); i++){
             Point curr_p = points[i];
             double min_d = std::numeric_limits<double>::max();

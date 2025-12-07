@@ -4,7 +4,9 @@
 #include <vector>
 #include <stdexcept>
 #define STB_IMAGE_IMPLEMENTATION
-#include "../code/libraries/stb_image.h"
+#include "stb_image.h"
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 
 Image::Image(int w, int h) : width(w), height(h) {
     data = new float[width * height * 4]; // 4 channels: R, G, B, A
@@ -104,4 +106,23 @@ bool Image::loadJPG(const std::string& filename) {
     
     std::cout << "Loaded image '" << filename << "' (" << width << "x" << height << ") as 32-bit RGBA." << std::endl;
     return true;
+}
+
+bool Image::save_image_to_jpg(const std::string& filename, const std::vector<unsigned char>& image_data, int width, int height, int quality=90) {
+    int success = stbi_write_jpg(
+        filename.c_str(), 
+        width, 
+        height, 
+        3, // Number of channels (RGB)
+        image_data.data(),
+        quality
+    );
+
+    if (success) {
+        std::cout << "\nSuccessfully saved image to '" << filename << "'" << std::endl;
+        return true;
+    } else {
+        std::cerr << "\nError: Failed to write image to '" << filename << "'" << std::endl;
+        return false;
+    }
 }

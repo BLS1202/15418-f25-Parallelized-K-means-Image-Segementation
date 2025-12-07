@@ -11,10 +11,10 @@
 #include <iomanip>
 #include <numeric> // Added for std::accumulate
 
-#define THREAD_X 32
-#define THREAD_Y 32
+#define THREAD_X 8
+#define THREAD_Y 8
 #define BLOCKSIZE (THREAD_X * THREAD_Y) // 1024
-#define K 8
+#define K 32
 #define REDUCTION_BLOCK_SIZE 256
 
 struct Point {
