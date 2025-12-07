@@ -1,5 +1,0 @@
-renderer_cuda:
-cd renderer_cuda
-make
-./kmeans_visualizer <mode> <image.ppm>
--------------------------------------------------

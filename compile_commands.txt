@@ -1,10 +1,12 @@
 basic cpu version:
+cd code
 g++ -c k_mean_image.cpp libraries/Image.cpp
 g++ k_mean_image.o Image.o -o k_means_normal
 ./k_means_normal <input_image.jpg> <output_image.jpg>
 
 -----------------------------------------------------
 cuda gpu version:
+cd code
 g++ -c libraries/Image.cpp -o Image.o
 nvcc -c k_mean_memory.cu -o k_mean_memory.o -ccbin g++-11
 nvcc Image.o k_mean_memory.o -o k_means_memory
@@ -12,11 +14,13 @@ nvcc Image.o k_mean_memory.o -o k_means_memory
 
 -----------------------------------------------------
 openmp:
+cd code
 g++ -c libraries/Image.cpp -o Image.o
 g++ -c k_mean_image_openmp1.cpp -fopenmp
 g++ Image.o k_mean_image_openmp1.o -fopenmp -o k_mean_image_openmp1
 ./k_mean_image_openmp1 num_threads <input_image.jpg> <output_image.jpg>
 
+cd code
 g++ -c libraries/Image.cpp -o Image.o
 g++ -c k_mean_image_openmp2.cpp -fopenmp
 g++ Image.o k_mean_image_openmp2.o -fopenmp -o k_mean_image_openmp2
@@ -24,6 +28,14 @@ g++ Image.o k_mean_image_openmp2.o -fopenmp -o k_mean_image_openmp2
 
 -----------------------------------------------------
 kmeans++ version:
+cd code
 g++ -c k_mean++_norm.cpp libraries/Image.cpp
 g++ k_mean++_norm.o Image.o -o k_means++_normal
 ./k_means++_normal<input_image.jpg> <output_image.jpg>
+
+-----------------------------------------------------
+
+cuda renderer:
+cd cuda_renderer
+make
+./kmeans_visualizer <mode> <image.jpg>
