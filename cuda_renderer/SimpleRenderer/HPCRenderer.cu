@@ -123,7 +123,7 @@ void HPCRenderer::stepKMeansIteration() {
     if (isKMeansDone()) {
         return;
     }
-    
+    std::cout << "Running K-Means Iteration: " << m_currentIteration << "/" << m_maxIterations << std::endl;
     // --- K-Means Iteration Logic (from k_mean_image.cpp) ---
     bool changed = false;
 

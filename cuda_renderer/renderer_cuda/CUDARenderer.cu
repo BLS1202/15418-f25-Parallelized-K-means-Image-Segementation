@@ -200,7 +200,6 @@ bool CUDARenderer::isKMeansDone() const {
 }
 
 Image* CUDARenderer::getDisplayImage() {
-    std::cout << "Generating final display image..." << std::endl;
 
     dim3 blockDim(THREAD_X, THREAD_Y);
     dim3 gridDim((m_width + THREAD_X - 1) / THREAD_X, (m_height + THREAD_Y - 1) / THREAD_Y);

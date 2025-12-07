@@ -145,9 +145,7 @@ void OpenMPRenderer::stepKMeansIteration() {
     if (isKMeansDone()) {
         return;
     }
-    
-    // --- K-Means Iteration Logic (from k_mean_image_openmp2.cpp) ---
-
+    std::cout << "Running K-Means Iteration: " << m_currentIteration << "/" << m_maxIterations << std::endl;
     int changed = 0;
     // Assignment Step
     #pragma omp parallel for reduction(||:changed)

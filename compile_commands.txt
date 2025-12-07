@@ -39,3 +39,4 @@ cuda renderer:
 cd cuda_renderer
 make
 ./kmeans_visualizer <mode> <image.jpg>
+mode options: simple, cuda, openmp
