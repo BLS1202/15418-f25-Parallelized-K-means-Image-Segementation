@@ -14,7 +14,7 @@
 #define THREAD_X 8
 #define THREAD_Y 8
 #define BLOCKSIZE (THREAD_X * THREAD_Y) // 1024
-#define K 4
+#define K 8
 
 struct Point {
     float r, g, b;

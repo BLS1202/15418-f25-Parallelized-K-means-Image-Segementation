@@ -22,7 +22,6 @@ g++ -c k_mean_image_openmp2.cpp -fopenmp
 g++ Image.o k_mean_image_openmp2.o -fopenmp -o k_mean_image_openmp2
 ./k_mean_image_openmp2 num_threads <input_image.jpg> <output_image.jpg>
 
-
 -----------------------------------------------------
 kmeans++ version:
 g++ -c k_mean++_norm.cpp libraries/Image.cpp

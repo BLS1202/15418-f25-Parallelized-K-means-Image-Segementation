@@ -9,6 +9,8 @@
 #include <limits>
 #include <chrono>
 #include <iomanip>
+#include "libraries/Image.h"
+
 #define THREAD_X 32
 #define THREAD_Y 32
 #define BLOCKSIZE (THREAD_X * THREAD_Y) // 1024
@@ -18,17 +20,6 @@ struct Point {
     float r, g, b;
 };
 
-void save_image_to_ppm(const std::string& filename, const std::vector<unsigned char>& image_data, int width, int height) {
-    std::ofstream file(filename, std::ios::out | std::ios::binary);
-    if (!file) {
-        std::cerr << "Error: Could not open file '" << filename << "' for writing." << std::endl;
-        return;
-    }
-    file << "P6\n" << width << " " << height << "\n255\n";
-    file.write(reinterpret_cast<const char*>(image_data.data()), image_data.size());
-    file.close();
-    std::cout << "Successfully saved quantized image to '" << filename << "'" << std::endl;
-}
 
 
 // the squared distance between two colors.
@@ -98,13 +89,25 @@ __global__ void generate_output_image_kernel(Point* d_outputImage, const int* d_
 }
 
 
-int main() {
+int main(int argc, char** argv) {
     const auto init_start = std::chrono::steady_clock::now();
-    // int K = 8;
     int MAX_ITERATIONS = 20;
 
     int IMG_WIDTH = 0;
     int IMG_HEIGHT = 0;
+
+    if(argc < 3){
+        std::cerr << "Usage: " << argv[0] << "<input_image.jpg>" << "<output_image.jpg>" << std::endl;
+        return 1;
+    }
+
+    std::string imagePath = argv[1];
+    std::string outPath = argv[2];
+    Image* originalImage = new Image(0, 0);
+    if (!originalImage->loadJPG(imagePath)) {
+        delete originalImage;
+        return 1;
+    }
 
     std::cout << "Starting K-Means Color Clustering..." << std::endl;
     std::cout << "  Clusters (K): " << K << std::endl;
@@ -112,31 +115,25 @@ int main() {
     std::cout << "------------------------------------" << std::endl;
 
     std::vector<Point> h_input_points;
-    std::string inputFilename = "../img/camera_man.ppm"; 
 
-    std::ifstream ppm_file(inputFilename, std::ios::in | std::ios::binary);
-    if (!ppm_file) {
-        std::cerr << "Error: Could not open file '" << inputFilename << "'. Please check the path." << std::endl;
-        return 1;
+
+    IMG_WIDTH = originalImage->width;   
+    IMG_HEIGHT = originalImage->height; 
+
+    float* img_data = originalImage -> data;
+    size_t total_pixels = (size_t)IMG_WIDTH * IMG_HEIGHT;
+
+    for (size_t i = 0; i < total_pixels; ++i) {
+
+        size_t data_index = i * 4; 
+
+        float r = (float)(img_data[data_index + 0] * 255.0f); 
+        float g = (float)(img_data[data_index + 1] * 255.0f); 
+        float b = (float)(img_data[data_index + 2] * 255.0f); 
+
+        h_input_points.push_back(Point{r, g, b});
     }
 
-    std::string line;
-    ppm_file >> line;
-    while (ppm_file.peek() == '\n' || ppm_file.peek() == '#') { ppm_file.ignore(256, '\n'); }
-    ppm_file >> IMG_WIDTH >> IMG_HEIGHT;
-    ppm_file.ignore(256, '\n');
-    ppm_file.ignore(256, '\n');
-
-    std::cout << "Reading image '" << inputFilename << "' (" << IMG_WIDTH << "x" << IMG_HEIGHT << ")" << std::endl;
-    
-    std::vector<unsigned char> raw_pixel_data(IMG_WIDTH * IMG_HEIGHT * 3);
-    ppm_file.read(reinterpret_cast<char*>(raw_pixel_data.data()), raw_pixel_data.size());
-    ppm_file.close();
-
-    h_input_points.resize(IMG_WIDTH * IMG_HEIGHT);
-    for (size_t i = 0; i < h_input_points.size(); ++i) {
-        h_input_points[i] = {(float)raw_pixel_data[i*3], (float)raw_pixel_data[i*3+1], (float)raw_pixel_data[i*3+2]};
-    }
     std::cout << "Loaded " << h_input_points.size() << " pixels as data points." << std::endl;
 
     int numPoints = IMG_WIDTH * IMG_HEIGHT;
@@ -219,8 +216,7 @@ int main() {
     }
     std::cout << "Image data stored in vector." << std::endl;
     
-    save_image_to_ppm("kmeans_quantized.ppm", result_image, IMG_WIDTH, IMG_HEIGHT);
-
+    originalImage -> save_image_to_jpg(outPath, result_image, IMG_WIDTH, IMG_HEIGHT, 90);
     cudaFree(d_inputImage);
     cudaFree(d_outputImage);
     cudaFree(d_centroids);

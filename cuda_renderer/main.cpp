@@ -1,7 +1,7 @@
 #include <iostream>
 #include <string>
 #include "platformgl.h" 
-#include "Image.h"
+#include "../code/libraries/Image.h"
 #include "SimpleRenderer/HPCRenderer.h"
 #include "renderer_openMP/OpenMPrenderer.h"
 #include "renderer_cuda/CUDARenderer.h"
