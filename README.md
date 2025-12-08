@@ -7,6 +7,8 @@
 
  We implemented K-means clustering image segmentation in CUDA on GPU and in OpenMP on the CPU and compared the performance of non-optimized versions with these two parallelized versions. Our implementation demonstrated significant speedups. We also parallelized the initialization step of K-means++ in CUDA, and implemented a CUDA based image renderer that can run CUDA and OpenMP implementations of K-means clustering segmentation on image for every frame.
 
+ Authors: Bert Shan, Charlotte Li
+
 ![Screenshot of the project](src/image.png)
 
 
@@ -130,10 +132,12 @@ The table below summarizes the speedup achieved by different implementations com
 ## Image Results
 
 Below is a comparison of the original input images and the resulting segmented images processed by our algorithm.
-Original Image	Segmented Image
-Camera Man<br><img src="./img/camera_man.jpg" width="300">	Segmented (K=8)<br><img src="./result/camera_out.jpg" width="300">
-Lego<br><img src="./img/lego.jpg" width="300">	Segmented (K=8)<br><img src="./result/lego_out.jpg" width="300">
-Forest<br><img src="./img/box.jpg" width="300">	Segmented (K=8)<br><img src="./result/box_out.jpg" width="300">
+
+| Original Image | Segmented Image (K=8) |
+| :---: | :---: |
+| **Camera Man**<br><img src="./img/camera_man.jpg" width="300" alt="Original Camera Man"> | **Segmented**<br><img src="./result/camera_out.jpg" width="300" alt="Segmented Camera Man"> |
+| **Lego**<br><img src="./img/lego.jpg" width="300" alt="Original Lego"> | **Segmented**<br><img src="./result/lego_out.jpg" width="300" alt="Segmented Lego"> |
+| **Box**<br><img src="./img/box.jpg" width="300" alt="Original Forest"> | **Segmented**<br><img src="./result/box_out.jpg" width="300" alt="Segmented Forest"> |
 
 ## Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
