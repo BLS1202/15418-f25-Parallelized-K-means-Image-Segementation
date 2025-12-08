@@ -101,30 +101,39 @@ A C++ compiler with OpenMP support (e.g., modern GCC).
 
 ## Performance
 
+We tested our implementations on a **GHC machine** (8 cores, NVIDIA RTX 2080 B) and a **PSC machine** (128 cores). Below is a summary of our findings regarding speedup and scalability.
 
-We tested our implementations on the GHC machine (8 cores, RTX 2080 B) and PSC machine (128 cores). Below is a summary of our findings.
-OpenMP (CPU)
-We implemented two versions: one using Atomic operations and one using Reduction. The Reduction method significantly outperformed the Atomic method by avoiding critical section bottlenecks.
-Speedup: On an 8-core machine, the Reduction method achieved approximately 7.5x speedup over the sequential version.
-Scalability: Speedup increases with thread count, though overhead limits gains beyond the physical core count.
-CUDA (GPU)
-We optimized memory access using Shared Memory and implemented a two-stage parallel reduction for centroid updates.
-Speedup: The shared memory optimization provided massive improvements, reaching over 700x speedup compared to the sequential CPU version for 8 clusters.
-Cluster Scalability: Unlike the CPU version, increasing the number of clusters (K) had minimal impact on execution time due to the massive parallelism of the GPU.
-K-means++: Our parallelized K-means++ initialization achieved up to 90x speedup (for K=16) compared to sequential initialization.
-Implementation	Optimization	Speedup (vs Sequential)
-OpenMP	Atomic Operations	~4.0x (8 threads)
-OpenMP	Reduction	~7.5x (8 threads)
-CUDA	Basic Global Memory	~120x
-CUDA	Shared Memory	~700x
+### OpenMP (CPU)
+We implemented two versions: one using **Atomic operations** and one using **Reduction**. The Reduction method significantly outperformed the Atomic method by avoiding critical section bottlenecks.
+
+*   **Speedup:** On an 8-core machine, the Reduction method achieved approximately **7.5x speedup** over the sequential version.
+*   **Scalability:** Speedup increases with thread count, though overhead limits gains beyond the physical core count.
+
+### CUDA (GPU)
+We optimized memory access using **Shared Memory** and implemented a two-stage parallel reduction for centroid updates.
+
+*   **Speedup:** The shared memory optimization provided massive improvements, reaching over **700x speedup** compared to the sequential CPU version for 8 clusters.
+*   **Cluster Scalability:** Unlike the CPU version, increasing the number of clusters ($K$) had minimal impact on execution time due to the massive parallelism of the GPU.
+*   **K-means++:** Our parallelized K-means++ initialization achieved up to **90x speedup** (for $K=16$) compared to sequential initialization.
+
+### Speedup Comparison
+
+The table below summarizes the speedup achieved by different implementations compared to the sequential baseline.
+
+| Implementation | Optimization Technique | Speedup (vs Sequential) |
+| :--- | :--- | :--- |
+| **OpenMP** (8 threads) | Atomic Operations | ~4.0x |
+| **OpenMP** (8 threads) | Reduction | ~7.5x |
+| **CUDA** | Basic Global Memory | ~120x |
+| **CUDA** | Shared Memory | ~700x |
 
 ## Image Results
 
 Below is a comparison of the original input images and the resulting segmented images processed by our algorithm.
 Original Image	Segmented Image
-Camera Man<br><img src="./img/camera_man.jpg" width="300">	Segmented (K=8)<br><img src="./img/camera_out.jpg" width="300">
-Lego<br><img src="./img/lego.jpg" width="300">	Segmented (K=8)<br><img src="./img/lego_out.jpg" width="300">
-Forest<br><img src="./img/box.jpg" width="300">	Segmented (K=8)<br><img src="./img/box_out.jpg" width="300">
+Camera Man<br><img src="./img/camera_man.jpg" width="300">	Segmented (K=8)<br><img src="./result/camera_out.jpg" width="300">
+Lego<br><img src="./img/lego.jpg" width="300">	Segmented (K=8)<br><img src="./result/lego_out.jpg" width="300">
+Forest<br><img src="./img/box.jpg" width="300">	Segmented (K=8)<br><img src="./result/box_out.jpg" width="300">
 
 ## Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
