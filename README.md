@@ -1,14 +1,12 @@
 # Project Title
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Build Status](https://img.shields.io/travis/com/your-username/your-repo.svg)](https://travis-ci.com/your-username/your-repo)
-[![Issues](https://img.shields.io/github/issues/your-username/your-repo)](https://github.com/your-username/your-repo/issues)
 
 A brief one-sentence description of what your project does. This should be catchy and informative.
 
 ## Description
 
-Provide a more in-depth overview of your project here. Explain the problem it solves, its main purpose, and who the target audience is. You can also include screenshots or GIFs here to showcase your project.
+15418 Fall 2025 project. We implemented K-means clustering image segmentation in CUDA on GPU and in OpenMP on the CPU and compared the performance of non-optimized versions with these two parallelized versions. Our implementation demonstrated significant speedups. We also parallelized the initialization step of K-means++ in CUDA, and implemented a CUDA based image renderer that can run CUDA and OpenMP implementations of K-means clustering segmentation on image for every frame.
 
 ![Screenshot of the project](path/to/your/screenshot.png)
 
