@@ -9,14 +9,17 @@
 
 ![Screenshot of the project](src/image.png)
 
+
 ## Table of Contents
 
-- [Prerequisites](#prerequisites)
 - [Features](#features)
+- [Prerequisites](#prerequisites)
 - [Usage](#usage)
-- [Examples] (#examples)
+- [Performance](#performance)
+- [Image Results](#image-results)
 - [Contributing](#contributing)
 - [License](#license)
+
 
 ## Features
 
@@ -28,11 +31,11 @@
 
 ## Prerequisites
 
-    We used NVIDIA GeForce RTX 2080 B GPUs for implementations and testing. Any platform
-    with NVIDIA GPU should work. Make sure the platform has NVIDIA CUDA Toolkit (including the nvcc compiler)
+We used NVIDIA GeForce RTX 2080 B GPUs for implementations and testing. Any platform
+with NVIDIA GPU should work. Make sure the platform has NVIDIA CUDA Toolkit (including the nvcc compiler)
 
-    If running OpenMP implementation, check how many cores are available on the CPU platform
-    A C++ compiler with OpenMP support (e.g., modern GCC).
+If running OpenMP implementation, check how many cores are available on the CPU platform
+A C++ compiler with OpenMP support (e.g., modern GCC).
 
 ## Usage
 
@@ -94,6 +97,37 @@
 
     More details for compile and running the files can be found in compile_commands.txt
 
-    
 
 
+## Performance
+
+
+We tested our implementations on the GHC machine (8 cores, RTX 2080 B) and PSC machine (128 cores). Below is a summary of our findings.
+OpenMP (CPU)
+We implemented two versions: one using Atomic operations and one using Reduction. The Reduction method significantly outperformed the Atomic method by avoiding critical section bottlenecks.
+Speedup: On an 8-core machine, the Reduction method achieved approximately 7.5x speedup over the sequential version.
+Scalability: Speedup increases with thread count, though overhead limits gains beyond the physical core count.
+CUDA (GPU)
+We optimized memory access using Shared Memory and implemented a two-stage parallel reduction for centroid updates.
+Speedup: The shared memory optimization provided massive improvements, reaching over 700x speedup compared to the sequential CPU version for 8 clusters.
+Cluster Scalability: Unlike the CPU version, increasing the number of clusters (K) had minimal impact on execution time due to the massive parallelism of the GPU.
+K-means++: Our parallelized K-means++ initialization achieved up to 90x speedup (for K=16) compared to sequential initialization.
+Implementation	Optimization	Speedup (vs Sequential)
+OpenMP	Atomic Operations	~4.0x (8 threads)
+OpenMP	Reduction	~7.5x (8 threads)
+CUDA	Basic Global Memory	~120x
+CUDA	Shared Memory	~700x
+
+## Image Results
+
+Below is a comparison of the original input images and the resulting segmented images processed by our algorithm.
+Original Image	Segmented Image
+Camera Man<br><img src="./img/camera_man.jpg" width="300">	Segmented (K=8)<br><img src="./img/camera_out.jpg" width="300">
+Lego<br><img src="./img/lego.jpg" width="300">	Segmented (K=8)<br><img src="./img/lego_out.jpg" width="300">
+Forest<br><img src="./img/box.jpg" width="300">	Segmented (K=8)<br><img src="./img/box_out.jpg" width="300">
+
+## Contributing
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+This project is licensed under the MIT License - see the LICENSE file for details.
