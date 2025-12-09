@@ -1,4 +1,4 @@
-# Parallelized-K-means-Image-Segementation (15418 Fall 2025 Project)
+# Parallelized-K-means-Image-Segmentation (15418 Fall 2025 Project)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
